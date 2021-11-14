@@ -1,12 +1,11 @@
 import {db} from "../db";
 
-export interface Renter {
+export interface Owner {
     user_id: Number;
-    renter_id: Number;
+    owner_id: Number;
     username: String;
     first_name: String;
     last_name: String;
     email: String;
     password: String;
-    age: number;
 }
