@@ -3,14 +3,11 @@ import {Review} from './review.model';
 import { Field } from './field.model';
 import { Rating } from './rating.model';
 
-export interface Post {
+export interface MiniPost {
     post_id: Number;
     title: string;
-    images: Array<String>;
-    address: String;
-    description: String;
-    fields: Array<Field>;
-    review: number
-    comments: Array<Comment>;
+    name: String;
+    image: String;
+    rating: number
     sports: Array<String>;
 }
