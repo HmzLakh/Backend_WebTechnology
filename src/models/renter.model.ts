@@ -8,5 +8,5 @@ export interface Renter {
     last_name: String;
     email: String;
     password: String;
-    age: number;
+    date_of_birth: String;
 }
