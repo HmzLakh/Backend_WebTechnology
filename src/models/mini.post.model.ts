@@ -5,9 +5,11 @@ import { Rating } from './rating.model';
 
 export interface MiniPost {
     post_id: Number;
+    owner_id: Number;
     title: string;
-    name: String;
-    image: String;
+    username: String;
     rating: number
     sports: Array<String>;
+    image: String;
+    
 }

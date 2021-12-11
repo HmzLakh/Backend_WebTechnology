@@ -1,16 +1,15 @@
 import {db} from "../db";
 import {Review} from './review.model';
 import { Field } from './field.model';
-import { Rating } from './rating.model';
 
 export interface Post {
     post_id: Number;
-    title: string;
+    name: string;
     images: Array<String>;
     address: String;
     description: String;
-    fields: Array<Field>;
-    review: number
-    comments: Array<Comment>;
     sports: Array<String>;
-}
+    rating: number;
+    reviews: Array<Review>;
+    fields: Array<Field>;
+} 
