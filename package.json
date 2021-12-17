@@ -1,7 +1,7 @@
 {
-  "name": "web-ex4",
+  "name": "Project Webtechnology",
   "version": "1.0.0",
-  "description": "Web Technologies - Exercise 4",
+  "description": "Web Technologies 6SP course project",
   "main": "src/index.js",
   "scripts": {
     "build": "tsc",
