@@ -11,5 +11,6 @@ export interface MiniPost {
     rating: number
     sports: Array<String>;
     image: String;
-    
+    min_price: Number;
+    max_price: Number;
 }

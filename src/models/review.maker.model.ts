@@ -1,7 +1,7 @@
 import {db} from "../db";
 import { Opinion } from './opinion.model';
 
-export interface Review {
+export interface ReviewMaker {
     post_id: Number;
     review_id: Number;
     username: String;
@@ -10,5 +10,4 @@ export interface Review {
     content: String;
     rating: Number;
     votes: Number;
-    liked_by_user: Boolean;
 }
