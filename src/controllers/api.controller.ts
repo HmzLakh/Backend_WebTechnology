@@ -78,12 +78,11 @@ export class ApiController extends BaseController {
 
 	}
 
-
-
+	// Hamza edited
+	// Route is ok, need only form validation
+	// Adding succes in order to stay consistent and know when to read errorMsg
+	// TODO ==> send json result when error occur? (empty username or password)
 	login(req: express.Request, res: express.Response): void {
-		console.log("username: ", req.body.username);
-		console.log("password: ", req.body.password);
-		
 		db.query(`SELECT COUNT(*) as matching_renter
 				FROM  User JOIN Renter ON User.user_id = Renter.user_id
 				WHERE username = "${req.body.username}" AND password = "${req.body.password}";
@@ -96,14 +95,14 @@ export class ApiController extends BaseController {
 				// `results` is an array with one element for every statement in the query:				
 				var is_renter = results[0][0].matching_renter > 0
 				var is_owner = results[1][0].matching_owner > 0
-
 				res.json({
+					"success": (is_renter || is_owner),
 					"is_renter": is_renter,
-					"is_owner": is_owner
+					"is_owner": is_owner,
+					'errorMsg': "No error"
 				})
-
 			});
-	}
+		}
 
 	register_user(firstname, lastname, username, password, email, dateofbirth, is_renter): void {
 		db.query(`INSERT INTO User VALUES(NULL,"${username}","${firstname}","${lastname}","${email}", "${password}")`,
@@ -121,6 +120,9 @@ export class ApiController extends BaseController {
 			})
 	}
 
+	// Hamza edit
+	// Error when registering for first time
+	// TODO Need to fix this!
 	register(req: express.Request, res: express.Response): void {
 		var is_renter = req.query.is_renter == "true";
 		console.log("is het een renter? ", is_renter)
