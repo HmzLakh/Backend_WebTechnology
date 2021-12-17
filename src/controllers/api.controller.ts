@@ -49,7 +49,7 @@ export class ApiController extends BaseController {
 		this.router.post("/addField", makepost.addField.bind(this))
 		this.router.post("/uploadImage", upload.single('image'), this.uploadImage.bind(this))
 
-		this.router.get("/getPost", this.getPost.bind(this));
+		this.router.get("/getPost/:post_id", this.getPost.bind(this));
         this.router.get("/getPosts", this.getPosts.bind(this));
         this.router.put("/editPost", this.editPost.bind(this));
         this.router.put("/editFields", this.editPost.bind(this));
@@ -81,6 +81,9 @@ export class ApiController extends BaseController {
 
 
 	login(req: express.Request, res: express.Response): void {
+		console.log("username: ", req.body.username);
+		console.log("password: ", req.body.password);
+		
 		db.query(`SELECT COUNT(*) as matching_renter
 				FROM  User JOIN Renter ON User.user_id = Renter.user_id
 				WHERE username = "${req.body.username}" AND password = "${req.body.password}";
@@ -248,8 +251,9 @@ export class ApiController extends BaseController {
 
 
 	getPost(req: express.Request, res: express.Response): void {
-		var postId = req.body.post_id
-		var renter_id = req.body.renter_id //if logged
+		var postId = parseInt(req.params.post_id)
+		var renter_id = 0
+		//var renter_id = (req.body.renter_id !== undefined) ? 0 : 0 //if logged
 		var post = "SELECT p.post_id, owner_id, name, address, information, AVG(rating) FROM Post AS p INNER JOIN Review AS r ON p.post_id = r.post_id WHERE p.post_id = ? GROUP BY p.post_id; "
 		var images = "SELECT image_url FROM Image AS i INNER JOIN ImagePost AS ip ON i.image_id = ip.image_id WHERE post_id = ?; "
 		var sports = "SELECT DISTINCT sport_name FROM Post AS p INNER JOIN Field AS f ON f.post_id = p.post_id INNER JOIN FieldType AS ft ON ft.field_id = f.field_id INNER JOIN Sport AS s ON s.sport_id = ft.sport_id WHERE p.post_id = ?; "
@@ -259,20 +263,16 @@ export class ApiController extends BaseController {
 			if (err) throw err;
 			const post = {
 				"post_id": postId,
-				"name": results[0].name,
+				"name": results[0][0].name,
     			"images": results[1],
-   				"address": results[0].address,
-   				"description": results[0].information,
+   				"address": results[0][0].address,
+   				"description": results[0][0].information,
 				"sports": results[2],
-    			"rating": results[0].rating,
+    			"rating": results[0][0].rating,
     			"reviews": results[3],
 				"fields": results[4]
 				} as Post; 
-
-				res.json({
-					"post": post
-				}
-				)	
+				res.json(post)	
 		  });
 	}
 	
@@ -290,7 +290,7 @@ export class ApiController extends BaseController {
 					"title": results[i].name,
 					"username": results[i].username,
 					"rating": results[i].rating,
-					"sports": results[i].sports_names,
+					"sports": results[i].sports_names.split(','),
 					"image": results[i].image_url
 					} as MiniPost;
 				miniPosts[i] = miniPost; 

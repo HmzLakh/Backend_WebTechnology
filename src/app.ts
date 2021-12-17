@@ -1,5 +1,6 @@
 import * as express from 'express';
 import * as session from 'express-session';
+import * as cors from 'cors';
 import { BaseController } from "./controllers/base.controller";
 import { ApiController } from "./controllers/api.controller";
 import * as path from 'path';
@@ -37,6 +38,7 @@ export class App {
             resave: true,
             saveUninitialized: true
         }));
+        this.app.use(cors())
         this.app.use(express.urlencoded({ extended: true }));
         this.app.use(express.static(path.join(__dirname, "../static"))); // Location for frontend
     }
