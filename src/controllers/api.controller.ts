@@ -83,23 +83,76 @@ export class ApiController extends BaseController {
 	// Adding succes in order to stay consistent and know when to read errorMsg
 	// TODO ==> send json result when error occur? (empty username or password)
 	login(req: express.Request, res: express.Response): void {
-		db.query(`SELECT COUNT(*) as matching_renter
-				FROM  User JOIN Renter ON User.user_id = Renter.user_id
-				WHERE username = "${req.body.username}" AND password = "${req.body.password}";
-				SELECT COUNT(*) as matching_owner
-				FROM  User JOIN Owner ON User.user_id = Owner.user_id
-		   		WHERE username = "${req.body.username}" AND password = "${req.body.password}"`,
-			[1, 2],
-			function (err, results) {
-				if (err) throw err;
-				// `results` is an array with one element for every statement in the query:				
-				var is_renter = results[0][0].matching_renter > 0
-				var is_owner = results[1][0].matching_owner > 0
+		if(req.body.username == undefined || req.body.password == undefined){
+			res.json({ "success": false, 'errorMsg': 'Invalid form' })
+			return
+		}
+
+		console.log(req.session);
+		if(req.session.userInfo){
+			res.json({ "success": false, 'errorMsg': 'Already connected!!!' })
+			return
+		}
+		const username = req.body.username
+		const password = req.body.password
+		
+		const queryRenter = `SELECT * FROM  User JOIN Owner ON User.user_id = Owner.user_id WHERE username = "${req.body.username}";`
+		const queryOwner =  `SELECT * FROM  User JOIN Renter ON User.user_id = Renter.user_id WHERE username = "${req.body.username}"`
+		
+		db.query(queryRenter+queryOwner, [1, 2], function (err, results) {
+				if (err){
+					res.json({ "success": false, 'errorMsg': 'Error occured with sql request' })
+					return
+				}
+
+				if(results[0].length > 0 && results[1].length > 0){
+					res.json({ "success": false, 'errorMsg': 'Error occured, multiple account with same username exists!' })
+					return
+				}
+
+				if(results[0].length == 0 && results[1].length == 0){
+					res.json({ "success": false, 'errorMsg': 'Error occured!' })
+					return
+				}
+
+				if(results[0].length > 0) {
+					const userinfo = results[0][0]
+					if(userinfo.password == password){
+						res.json({
+							"success": true,
+							"is_renter": true,
+							"is_owner": false,
+							'errorMsg': "No error"
+						})
+						req.session.userInfo = { logged: true, userid: userinfo.user_id, is_owner: false, is_renter: true}
+						/*req.session.logged = true
+						req.session.userid = userinfo.user_id
+						req.session.is_owner = false
+						req.session.is_renter = true*/
+						req.session.save()
+						return
+					}
+				} else {
+					const userinfo = results[1][0]
+					if(userinfo.password == password){
+						res.json({
+							"success": true,
+							"is_renter": false,
+							"is_owner": true,
+							'errorMsg': "No error"
+						})
+						req.session.userInfo = { logged: true, userid: userinfo.user_id, is_owner: true, is_renter: false}
+						/*req.session.logged = true
+						req.session.userid = userinfo.user_id
+						req.session.is_owner = true
+						req.session.is_renter = false*/
+						req.session.save()
+						return
+					}
+				}
 				res.json({
-					"success": (is_renter || is_owner),
-					"is_renter": is_renter,
-					"is_owner": is_owner,
-					'errorMsg': "No error"
+					"success": false,
+					'errorMsg': "Error occured!"
 				})
 			});
 		}
