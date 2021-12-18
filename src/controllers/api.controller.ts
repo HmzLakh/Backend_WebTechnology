@@ -8,6 +8,7 @@ import * as makepost from './makepost'
 import { Post } from '../models/post.model';
 import { MiniPost } from '../models/mini.post.model';
 import { Reservation } from '../models/reservation.model';
+import bodyParser = require('body-parser');
 
 
 const multer = require('multer');
@@ -99,12 +100,23 @@ export class ApiController extends BaseController {
 					"success": (is_renter || is_owner),
 					"is_renter": is_renter,
 					"is_owner": is_owner,
-					'errorMsg': "No error"
+					'errorMsg': (req.body.username === "" ? "username field empty" : "") + (req.body.password === "" ? " password field empty" : "") 
 				})
 			});
 		}
 
-	register_user(firstname, lastname, username, password, email, dateofbirth, is_renter): void {
+	register_user(firstname, lastname, username, password, email, dateofbirth, is_renter, res): void {
+		const password_min_length = 8
+		if(password.length < password_min_length ||  !this._isEmailValid(email)){
+			res.json({
+				"succes": false,
+				"email_taken": false,
+				"username_exists": false,
+				"password_valid": password.length > password_min_length,
+				"email_valid": this._isEmailValid(email)				
+			})
+		}
+		else{
 		db.query(`INSERT INTO User VALUES(NULL,"${username}","${firstname}","${lastname}","${email}", "${password}")`,
 			function (error, result) {
 				if (error) throw error;
@@ -117,7 +129,16 @@ export class ApiController extends BaseController {
 				else {
 					db.query(`INSERT INTO Owner VALUES(NULL, ${user_id})`, (error, result) => { if (error) throw error })
 				}
-			})
+
+				res.json({
+					"succes": true,
+					"email_taken": false,
+					"username_exists": false,
+					"password_valid": true,
+					"email_valid": true
+				})
+			})		
+		}
 	}
 
 	// Hamza edit
@@ -137,18 +158,15 @@ export class ApiController extends BaseController {
 				var username_exists = results[1][0].matching_username > 0
 
 				if (!(email_exists || username_exists)) {
-					this.register_user(req.body.firstname, req.body.lastname, req.body.username, req.body.password, req.body.email, req.body.dateofbirth, is_renter);
-					res.json({
-						"succes": true,
-						"email_taken": false,
-						"username_exists": false
-					})
+					this.register_user(req.body.firstname, req.body.lastname, req.body.username, req.body.password, req.body.email, req.body.dateofbirth, is_renter, res);
 				}
 				else {
 					res.json({
 						"succes": false,
 						"email_taken": email_exists,
-						"username_exists": username_exists
+						"username_exists": username_exists,
+						"password_valid": true,
+						"email_valid": true
 					})
 				}
 			})
