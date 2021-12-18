@@ -51,9 +51,11 @@ export class ApiController extends BaseController {
 		this.router.post("/uploadImage", upload.single('image'), this.uploadImage.bind(this))
 
 		this.router.get("/getPost/:post_id", this.getPost.bind(this));
-        this.router.get("/getPosts", this.getPosts.bind(this));
-        this.router.put("/editPost", this.editPost.bind(this));
-        this.router.put("/editFields", this.editPost.bind(this));
+		this.router.get("/getPosts", this.getPosts.bind(this));
+		this.router.put("/editPost", this.editPost.bind(this));
+		this.router.put("/editFields", this.editPost.bind(this));
+
+		this.router.post("/makeReview", this.makeReview.bind(this));
 
 
 	}
@@ -102,47 +104,47 @@ export class ApiController extends BaseController {
 					"success": (is_renter || is_owner),
 					"is_renter": is_renter,
 					"is_owner": is_owner,
-					'errorMsg': (req.body.username === "" ? "username field empty" : "") + (req.body.password === "" ? " password field empty" : "") 
+					'errorMsg': (req.body.username === "" ? "username field empty" : "") + (req.body.password === "" ? " password field empty" : "")
 				})
 			});
-		}
+	}
 
 	register_user(firstname, lastname, username, password, email, dateofbirth, is_renter, res): void {
 		const password_min_length = 8
 		const username_min_length = 3
-		if(password.length < password_min_length ||  !this._isEmailValid(email) || username.length < username_min_length){ //FORM VALIDATION IN HERE!
+		if (password.length < password_min_length || !this._isEmailValid(email) || username.length < username_min_length) { //FORM VALIDATION IN HERE!
 			res.json({
 				"succes": false,
 				"email_taken": false,
 				"username_exists": false,
 				"username_valid": username.length > username_min_length,
 				"password_valid": password.length > password_min_length,
-				"email_valid": this._isEmailValid(email)				
+				"email_valid": this._isEmailValid(email)
 			})
 		}
-		else{
-		db.query(`INSERT INTO User VALUES(NULL,"${username}","${firstname}","${lastname}","${email}", "${password}")`,
-			function (error, result) {
-				if (error) throw error;
+		else {
+			db.query(`INSERT INTO User VALUES(NULL,"${username}","${firstname}","${lastname}","${email}", "${password}")`,
+				function (error, result) {
+					if (error) throw error;
 
-				var user_id = result.insertId;
-				console.log(user_id)
-				if (is_renter) {
-					db.query(`INSERT INTO Renter VALUES(NULL,"${dateofbirth}", ${user_id})`, (error, result) => { if (error) throw error })
-				}
-				else {
-					db.query(`INSERT INTO Owner VALUES(NULL, ${user_id})`, (error, result) => { if (error) throw error })
-				}
+					var user_id = result.insertId;
+					console.log(user_id)
+					if (is_renter) {
+						db.query(`INSERT INTO Renter VALUES(NULL,"${dateofbirth}", ${user_id})`, (error, result) => { if (error) throw error })
+					}
+					else {
+						db.query(`INSERT INTO Owner VALUES(NULL, ${user_id})`, (error, result) => { if (error) throw error })
+					}
 
-				res.json({
-					"succes": true,
-					"email_taken": false,
-					"username_exists": false,
-					"password_valid": true,
-					"username_valid": true,
-					"email_valid": true
+					res.json({
+						"succes": true,
+						"email_taken": false,
+						"username_exists": false,
+						"password_valid": true,
+						"username_valid": true,
+						"email_valid": true
+					})
 				})
-			})		
 		}
 	}
 
@@ -285,31 +287,31 @@ export class ApiController extends BaseController {
 		var sports = "SELECT DISTINCT sport_name FROM Post AS p INNER JOIN Field AS f ON f.post_id = p.post_id INNER JOIN FieldType AS ft ON ft.field_id = f.field_id INNER JOIN Sport AS s ON s.sport_id = ft.sport_id WHERE p.post_id = ?; "
 		var reviews = "SELECT r.review_id, r.renter_id, r.content, r.date_time, r.rating, SUM(O.opinion) AS votes , n.votedby FROM Review AS r INNER JOIN Post AS p ON p.post_id = r.post_id INNER JOIN Renter AS re ON r.renter_id = re.renter_id INNER JOIN ImageUser AS iu ON iu.user_id = re.user_id INNER JOIN Image AS i ON i.image_id = iu.image_id  LEFT OUTER JOIN Opinion AS o ON o.review_id = r.review_id LEFT OUTER JOIN (SELECT r2.review_id, o2.opinion AS votedby FROM Opinion AS o2 INNER JOIN Review AS r2 ON r2.review_id = o2.review_id WHERE o2.renter_id = ?  GROUP BY r2.review_id) AS n ON r.review_id = n.review_id WHERE p.post_id = ? GROUP BY r.review_id ORDER BY votes DESC; "
 		var fields = "SELECT f.field_id, f.name, f.price, f.recommended_number_of_persons, GROUP_CONCAT(DISTINCT s.sport_name) AS sports_names FROM Field AS f INNER JOIN FieldType AS ft ON ft.field_id = f.field_id INNER JOIN Sport AS s ON s.sport_id = ft.sport_id WHERE f.post_id = ? GROUP BY f.field_id;"
-        db.query(post + images + sports+ reviews + fields  ,[postId, postId, postId, renter_id, postId, postId], function(err, results) {
+		db.query(post + images + sports + reviews + fields, [postId, postId, postId, renter_id, postId, postId], function (err, results) {
 			if (err) throw err;
 			const post = {
 				"post_id": postId,
 				"name": results[0][0].name,
-    			"images": results[1],
-   				"address": results[0][0].address,
-   				"description": results[0][0].information,
+				"images": results[1],
+				"address": results[0][0].address,
+				"description": results[0][0].information,
 				"sports": results[2],
-    			"rating": results[0][0].rating,
-    			"reviews": results[3],
+				"rating": results[0][0].rating,
+				"reviews": results[3],
 				"fields": results[4]
-				} as Post; 
-				res.json(post)	
-		  });
+			} as Post;
+			res.json(post)
+		});
 	}
-	
+
 	getPosts(req: express.Request, res: express.Response): void {
-		var qry = "SELECT p.post_id, o.owner_id, p.name, u.username, AVG(r.rating) AS rating,GROUP_CONCAT(DISTINCT s.sport_name) AS sports_names, i.image_url, MIN(f.price) as min_price, MAX(f.price) as max_price FROM Post AS p INNER JOIN Owner AS o ON p.owner_id = o.owner_id INNER JOIN User AS u ON o.user_id = u.user_id LEFT OUTER JOIN Review AS r ON p.post_id = r.post_id LEFT OUTER JOIN Field AS f ON p.post_id = f.post_id LEFT OUTER JOIN FieldType AS ft ON f.field_id = ft.field_id LEFT OUTER JOIN Sport AS s ON s.sport_id = ft.sport_id LEFT OUTER JOIN ImagePost AS ip ON p.post_id = ip.post_id INNER JOIN Image AS i ON ip.image_id = i.image_id WHERE incr_id = 1  GROUP BY p.post_id;" 
-        db.query( qry, function(err, results) {
+		var qry = "SELECT p.post_id, o.owner_id, p.name, u.username, AVG(r.rating) AS rating,GROUP_CONCAT(DISTINCT s.sport_name) AS sports_names, i.image_url, MIN(f.price) as min_price, MAX(f.price) as max_price FROM Post AS p INNER JOIN Owner AS o ON p.owner_id = o.owner_id INNER JOIN User AS u ON o.user_id = u.user_id LEFT OUTER JOIN Review AS r ON p.post_id = r.post_id LEFT OUTER JOIN Field AS f ON p.post_id = f.post_id LEFT OUTER JOIN FieldType AS ft ON f.field_id = ft.field_id LEFT OUTER JOIN Sport AS s ON s.sport_id = ft.sport_id LEFT OUTER JOIN ImagePost AS ip ON p.post_id = ip.post_id INNER JOIN Image AS i ON ip.image_id = i.image_id WHERE incr_id = 1  GROUP BY p.post_id;"
+		db.query(qry, function (err, results) {
 			if (err) throw err;
 
 			var miniPosts = [];
 
-			for (let i = 0; i < results.length; i++) { 
+			for (let i = 0; i < results.length; i++) {
 				const miniPost = {
 					"post_id": results[i].post_id,
 					"owner_id": results[i].owner_id,
@@ -318,13 +320,13 @@ export class ApiController extends BaseController {
 					"rating": results[i].rating,
 					"sports": results[i].sports_names.split(','),
 					"image": results[i].image_url
-					} as MiniPost;
-				miniPosts[i] = miniPost; 
+				} as MiniPost;
+				miniPosts[i] = miniPost;
 			}
-				res.json(miniPosts)	
-		  });
+			res.json(miniPosts)
+		});
 	}
-	
+
 	editPost(req: express.Request, res: express.Response): void {
 		var postId = req.body.post_id
 		var name = req.body.name
@@ -334,32 +336,32 @@ export class ApiController extends BaseController {
 		var deletedImages = req.body.deletedImages
 		var update = "UPDATE Post SET name = ?, address = ?, information = ? WHERE post_id = ?; "
 		var qryDeleteImages = ""
-		for (let i = 0; i < deletedImages.length; i++) { 
+		for (let i = 0; i < deletedImages.length; i++) {
 			const image = deletedImages[i]
-			qryDeleteImages += `DELETE ip.*,i.* FROM ImagePost ip JOIN Image i ON ip.image_id = i.image_id WHERE i.image_id = (SELECT i2.image_id FROM (SELECT * FROM Image) AS i2 WHERE i2.image_url = ${image}); ` 
-			
-		
+			qryDeleteImages += `DELETE ip.*,i.* FROM ImagePost ip JOIN Image i ON ip.image_id = i.image_id WHERE i.image_id = (SELECT i2.image_id FROM (SELECT * FROM Image) AS i2 WHERE i2.image_url = ${image}); `
+
+
 		}
 		var qryAddImages = ""
-		for (let i = 0; i < addedImages.length; i++) { 
+		for (let i = 0; i < addedImages.length; i++) {
 			const image = addedImages[i]
 			qryAddImages += `INSERT INTO Image VALUES (${image}, NULL); INSERT INTO ImagePost VALUES ((SELECT i.image_id FROM image AS i WHERE i.image_url = ${image}), ${postId}, (SELECT max(incr_id) FROM (SELECT * FROM ImagePost) AS ImagePost2 WHERE ImagePost2.post_id = ${postId}) + 1); `
 		}
-		
-		db.query(update + qryDeleteImages + qryAddImages,[name, address, information, postId], function(err, results) {
-			if (err) throw err; 
+
+		db.query(update + qryDeleteImages + qryAddImages, [name, address, information, postId], function (err, results) {
+			if (err) throw err;
 			res.status(200).json("good")
-		  });
+		});
 	}
-	
+
 	editFields(req: express.Request, res: express.Response): void {
 		var postId = req.body.post_id
 		var fields = req.body.fields
 		var deletedfields = req.body.deletedfields
-		
-		
+
+
 		var qryUpdate = ""
-		for (let i = 0; i < fields.length; i++) { 
+		for (let i = 0; i < fields.length; i++) {
 			const field = fields[i]
 			const fieldId = field.field_id
 			const name = field.name
@@ -368,40 +370,40 @@ export class ApiController extends BaseController {
 			const deletedSports = field.deletedSports
 			const addedSports = field.addedSports
 			qryUpdate += `UPDATE Field SET name = ${name}, price = ${price}, recommended_number_of_persons = ${maxNumberOfPersons} WHERE post_id = ${postId} AND field_id = ${fieldId}; `
-			for (let i = 0; i < addedSports.length; i++) { 
+			for (let i = 0; i < addedSports.length; i++) {
 				const sportName = addedSports[i]
 				qryUpdate += `INSERT INTO FieldType VALUES((SELECT sport_id FROM Sport WHERE sport_name = ${sportName}), ${fieldId}); `
 			}
-			for (let i = 0; i < deletedSports.length; i++) { 
+			for (let i = 0; i < deletedSports.length; i++) {
 				const sportName = deletedSports[i]
 				qryUpdate += `DELETE FROM FieldType AS ft WHERE ft.field_id = ${fieldId} AND sport_id = (SELECT sport_id FROM Sport WHERE sport_name = ${sportName});; `
 			}
 		}
-	
-		var qryDelete= ""
-		for (let i = 0; i < deletedfields.length; i++) { 
+
+		var qryDelete = ""
+		for (let i = 0; i < deletedfields.length; i++) {
 			const fieldId = deletedfields[i]
 			qryDelete += `DELETE ft.*,f.* FROM FieldType ft JOIN Field f ON ft.field_id = f.field_id WHERE ft.field_id = ${fieldId}; `
 		}
-		
-		db.query(qryUpdate + qryDelete ,[], function(err, results) {
-			if (err) throw err; 
+
+		db.query(qryUpdate + qryDelete, [], function (err, results) {
+			if (err) throw err;
 			res.status(200).json("good")
-		  });
+		});
 	}
-	
+
 	getReservations(req: express.Request, res: express.Response): void {
 		var renterID = req.body.renterID
-		var ownnerID = req.body.ownnerID 
+		var ownnerID = req.body.ownnerID
 		//or use userID ???
 
 		// if renter,,,, pas oublié if owner ;)
 		var qry = "SELECT r.reservation_id, re.renter_id, p.post_id, f.field_id, p.name AS post_name, f.name AS field_name, r.date, r.time FROM Reservation r JOIN Renter re ON r.renter_id = re.renter_id JOIN Post p ON p.post_id = r.post_id JOIN Field f ON f.field_id = r.field_id WHERE re.renter_id = ? ORDER BY r.date ASC, r.time ASC; "
-        db.query(qry ,[renterID], function(err, results) {
+		db.query(qry, [renterID], function (err, results) {
 			if (err) throw err;
 			var reservations = [];
 
-			for (let i = 0; i < results.length; i++) { 
+			for (let i = 0; i < results.length; i++) {
 				const reservation = {
 					"reservation_id": results[i].reservation_id,
 					"renter_id": results[i].renter_id,
@@ -412,16 +414,42 @@ export class ApiController extends BaseController {
 					"time": results[i].time,
 					"post_name": results[i].post_name,
 					"field_name": results[i].field_name
-					
-					} as Reservation;
-					reservations[i] = reservation; 
+
+				} as Reservation;
+				reservations[i] = reservation;
 			}
-				res.json(reservations)
-		  });
+			res.json(reservations)
+		});
 	}
 
+	
+	
 
 
+	// output: success in a json saying yes or not review was submitted
+	// input:  'post_id',  'rating(1-5), 'content', renter_id
+	makeReview(req: express.Request, res: express.Response): void {
+		const errormsg = "review must be an integer  between 1 and 5"
+		if(this.checkrating(req.body.rating)){
+			db.query(`INSERT INTO Review VALUES(null, ${req.body.post_id}, ${req.body.renter_id}, "${req.body.content}", "${new Date().toLocaleDateString() + " " +  new Date().toLocaleTimeString()}", ${req.body.rating})`
+			, (err, result) =>{
+				 if(err) throw err;
+				 res.json({succes: true,
+						    error: ""})
+			})
+
+		}
+		else res.json({succes: false, error: errormsg})
+	}
+
+	checkrating(str:string){
+		const min = 0
+		const max = 5
+		if(/^\d+$/.test(str)){
+			return (min <= parseInt(str)) && (parseInt(str) <= 5)
+		}
+		else return false 
+	}
 	/**
 	 * GET request for the user controller. Despite being named "get" you can
 	 * name this function whatever you want (e.g. getUser, ...).
