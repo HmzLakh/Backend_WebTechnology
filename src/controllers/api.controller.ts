@@ -112,10 +112,10 @@ export class ApiController extends BaseController {
 				var user_id = result.insertId;
 				console.log(user_id)
 				if (is_renter) {
-					db.query(`INSERT INTO Renter VALUES(NULL,"${dateofbirth}", "${user_id}")`, (error, result) => { if (error) throw error })
+					db.query(`INSERT INTO Renter VALUES(NULL,"${dateofbirth}", ${user_id})`, (error, result) => { if (error) throw error })
 				}
 				else {
-					db.query(`INSERT INTO Owner VALUES(NULL, "${user_id}"")`, (error, result) => { if (error) throw error })
+					db.query(`INSERT INTO Owner VALUES(NULL, ${user_id})`, (error, result) => { if (error) throw error })
 				}
 			})
 	}
@@ -124,7 +124,7 @@ export class ApiController extends BaseController {
 	// Error when registering for first time
 	// TODO Need to fix this!
 	register(req: express.Request, res: express.Response): void {
-		var is_renter = req.query.is_renter == "true";
+		var is_renter = req.body.is_renter === "true";
 		console.log("is het een renter? ", is_renter)
 		db.query(`SELECT COUNT(*) as matching_email 
 				 FROM user WHERE email = "${req.body.email}";
@@ -137,7 +137,7 @@ export class ApiController extends BaseController {
 				var username_exists = results[1][0].matching_username > 0
 
 				if (!(email_exists || username_exists)) {
-					this.register_user(req.body.firstname, req.body.lastname, req.body.username, req.body.password, req.body.email, req.body.dateofbirth, false);
+					this.register_user(req.body.firstname, req.body.lastname, req.body.username, req.body.password, req.body.email, req.body.dateofbirth, is_renter);
 					res.json({
 						"succes": true,
 						"email_taken": false,
