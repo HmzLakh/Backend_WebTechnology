@@ -54,6 +54,8 @@ export class ApiController extends BaseController {
         this.router.get("/getPosts", this.getPosts.bind(this));
         this.router.put("/editPost", this.editPost.bind(this));
         this.router.put("/editFields", this.editPost.bind(this));
+
+
 	}
 
 
@@ -107,11 +109,13 @@ export class ApiController extends BaseController {
 
 	register_user(firstname, lastname, username, password, email, dateofbirth, is_renter, res): void {
 		const password_min_length = 8
-		if(password.length < password_min_length ||  !this._isEmailValid(email)){
+		const username_min_length = 3
+		if(password.length < password_min_length ||  !this._isEmailValid(email) || username.length < username_min_length){ //FORM VALIDATION IN HERE!
 			res.json({
 				"succes": false,
 				"email_taken": false,
 				"username_exists": false,
+				"username_valid": username.length > username_min_length,
 				"password_valid": password.length > password_min_length,
 				"email_valid": this._isEmailValid(email)				
 			})
@@ -135,6 +139,7 @@ export class ApiController extends BaseController {
 					"email_taken": false,
 					"username_exists": false,
 					"password_valid": true,
+					"username_valid": true,
 					"email_valid": true
 				})
 			})		
@@ -166,6 +171,7 @@ export class ApiController extends BaseController {
 						"email_taken": email_exists,
 						"username_exists": username_exists,
 						"password_valid": true,
+						"username_valid": true,
 						"email_valid": true
 					})
 				}
@@ -413,6 +419,7 @@ export class ApiController extends BaseController {
 				res.json(reservations)
 		  });
 	}
+
 
 
 	/**

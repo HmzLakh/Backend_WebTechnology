@@ -8,14 +8,13 @@ import { db } from '../db';
 // Address: string 
 // Information: idk
 // username: string
-// sports: array
+// image_ids: array
 
 // Out: 
 // Address_already_in_use: boolean 
 // valid_username: boolean   //user is  an owner
 // succes: boolean
 
-//TODO foreach addimagepost !!!
 function makePost(req: express.Request, res: express.Response): void {
     const InsertObject = {
         ownerID: null,     //must be set to a number or false by get_user_id procedure   
@@ -77,6 +76,15 @@ function makePost(req: express.Request, res: express.Response): void {
     InsertObject.first_fn()
     InsertObject.second_fn()
 
+    addSports(req.body.fieldID, req.body.sportsIDs)
+
+}
+
+function addSports(fieldID, sportsIDs){
+    sportsIDs.forEach(sportID => {
+        db.query(`INSERT INTO FieldType VALUES(${sportID}, ${fieldID} )`)
+        
+    });
 }
 
 //callback is function with one argument: the owner_id: will be a number if correct username, else it will be false.
@@ -216,35 +224,8 @@ function addField(req: express.Request, res: express.Response): void {
     InsertObject.start();
 }
 
-// //aaddsports
-// //in: fieldID, sports_array 
-// //out: invalid
-// function addSports(fieldID, sports) {
-//     var invalidSports = []
-//     sports.forEach(sport, i) => 
-//     {
-//         addSport(fieldID,sport, (invalidsport) =>{ console.log("invalid: ", sport); invalidSports.push[invalidsport]});
 
 
-//     }
 
-
-// }
-
-// function addSport(fieldID, sport, callback) {
-//     db.query(`SELECT COUNT(*) as matching_sport FROM Sport WHERE Sport_name = "${sport}"`,
-//         (err, result) => {
-//             if (err) throw err;
-//             else {
-//                 if (result[0].matching_sport === 0){  callback(sport);}
-//                 else db.query(`INSERT IGNORE INTO FieldType VALUES((SELECT Sport_id FROM Sport WHERE Sport_name = "${sport}") , ${fieldID})`,  //ignore --> als er al een row is word er niet opnieuw geinsert
-//                     (err, result) => {
-//                         if (err) throw err;
-//                     })
-//             }
-//         })
-// }
-
-
-export { makePost, AddImagePost, addField, }
+export { makePost, AddImagePost, addField, addSports}
 
