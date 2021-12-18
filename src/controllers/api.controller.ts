@@ -38,10 +38,9 @@ export class ApiController extends BaseController {
 
 	initializeRoutes(): void {
 		// GET /api
-		this.router.get("", this.get.bind(this));
 		this.router.post("/login", this.login.bind(this))
 		this.router.post("/register", this.register.bind(this))
-		this.router.get("/profile", this.profile.bind(this));
+		this.router.get("/profile/:username", this.profile.bind(this));
 		this.router.post("/editProfile", this.editProfile.bind(this))
 		this.router.post("/test", h.test.bind(this))
 		this.router.post("/makePost", makepost.makePost.bind(this))
@@ -53,9 +52,10 @@ export class ApiController extends BaseController {
         this.router.get("/getPosts", this.getPosts.bind(this));
         this.router.put("/editPost", this.editPost.bind(this));
         this.router.put("/editFields", this.editPost.bind(this));
+
+		this.router.get("/connected", this.isUserAlreadyConnected.bind(this))
+		this.router.get("/logout", this.logout.bind(this))
 	}
-
-
 
 	uploadImage(req, res): void {
 		console.log(req.file)
@@ -70,34 +70,23 @@ export class ApiController extends BaseController {
 		}
 	}
 
-
-	get(req: express.Request, res: express.Response): void {
-		res.status(200).json({
-			"success": true
-		})
-
-	}
-
 	// Hamza edited
-	// Route is ok, need only form validation
-	// Adding succes in order to stay consistent and know when to read errorMsg
-	// TODO ==> send json result when error occur? (empty username or password)
 	login(req: express.Request, res: express.Response): void {
-		if(req.body.username == undefined || req.body.password == undefined){
+		const username = req.body.username
+		const password = req.body.password
+
+		if(username == undefined || password == undefined){
 			res.json({ "success": false, 'errorMsg': 'Invalid form' })
 			return
 		}
 
-		console.log(req.session);
 		if(req.session.userInfo){
 			res.json({ "success": false, 'errorMsg': 'Already connected!!!' })
 			return
 		}
-		const username = req.body.username
-		const password = req.body.password
 		
-		const queryRenter = `SELECT * FROM  User JOIN Owner ON User.user_id = Owner.user_id WHERE username = "${req.body.username}";`
-		const queryOwner =  `SELECT * FROM  User JOIN Renter ON User.user_id = Renter.user_id WHERE username = "${req.body.username}"`
+		const queryRenter = `SELECT * FROM  User JOIN Owner ON User.user_id = Owner.user_id WHERE username = "${username}";`
+		const queryOwner =  `SELECT * FROM  User JOIN Renter ON User.user_id = Renter.user_id WHERE username = "${username}"`
 		
 		db.query(queryRenter+queryOwner, [1, 2], function (err, results) {
 				if (err){
@@ -124,11 +113,7 @@ export class ApiController extends BaseController {
 							"is_owner": false,
 							'errorMsg': "No error"
 						})
-						req.session.userInfo = { logged: true, userid: userinfo.user_id, is_owner: false, is_renter: true}
-						/*req.session.logged = true
-						req.session.userid = userinfo.user_id
-						req.session.is_owner = false
-						req.session.is_renter = true*/
+						req.session.userInfo = { logged: true, userid: userinfo.user_id, is_owner: false, is_renter: true, firstname: userinfo.first_name, lastname: userinfo.last_name, email: userinfo.email}
 						req.session.save()
 						return
 					}
@@ -141,11 +126,7 @@ export class ApiController extends BaseController {
 							"is_owner": true,
 							'errorMsg': "No error"
 						})
-						req.session.userInfo = { logged: true, userid: userinfo.user_id, is_owner: true, is_renter: false}
-						/*req.session.logged = true
-						req.session.userid = userinfo.user_id
-						req.session.is_owner = true
-						req.session.is_renter = false*/
+						req.session.userInfo = { logged: true, userid: userinfo.user_id, is_owner: true, is_renter: false, firstname: userinfo.first_name, lastname: userinfo.last_name, email: userinfo.email}
 						req.session.save()
 						return
 					}
@@ -157,91 +138,210 @@ export class ApiController extends BaseController {
 			});
 		}
 
-	register_user(firstname, lastname, username, password, email, dateofbirth, is_renter): void {
+	// Hamza edited
+	// Destroys session of user
+	logout(req: express.Request, res: express.Response): void {
+		if(req.session.userInfo !== undefined) {
+			res.json({
+				"success": true
+			})
+			req.session.destroy((err) => {})
+		} else {
+			res.json({
+				"success": false
+			})
+		}
+	}
+
+	// Hamza edited
+	register_user(req, res, firstname, lastname, username, password, email, dateofbirth, is_renter, is_owner): void {
 		db.query(`INSERT INTO User VALUES(NULL,"${username}","${firstname}","${lastname}","${email}", "${password}")`,
 			function (error, result) {
-				if (error) throw error;
-
-				var user_id = result.insertId;
-				console.log(user_id)
-				if (is_renter) {
-					db.query(`INSERT INTO Renter VALUES(NULL,"${dateofbirth}", "${user_id}")`, (error, result) => { if (error) throw error })
+				if (error) {
+					res.json({ "success": false, 'errorMsg': 'Error occured with sql request' })
+					return
 				}
-				else {
-					db.query(`INSERT INTO Owner VALUES(NULL, "${user_id}"")`, (error, result) => { if (error) throw error })
+				var user_id = result.insertId;
+				if (is_renter) {
+					db.query(`INSERT INTO Renter VALUES(NULL,"${dateofbirth}", ${user_id})`, (error, result) => { 
+						if (error) {
+							res.json({ "success": false, 'errorMsg': 'Error occured with sql request' })
+							return
+						}
+						res.json({
+							"success": true,
+							'errorMsg': "No error"
+						})
+						req.session.userInfo = { logged: true, userid: user_id, is_owner: false, is_renter: true}
+						req.session.save()
+					})
+					return
+				}
+				if(is_owner) {
+					db.query(`INSERT INTO Owner VALUES(NULL, ${user_id})`, (error, result) => { 
+						if (error) {
+							res.json({ "success": false, 'errorMsg': 'Error occured with sql request' })
+							return
+						}
+						res.json({
+							"success": true,
+							'errorMsg': "No error"
+						})
+						req.session.userInfo = { logged: true, userid: user_id, is_owner: true, is_renter: false}
+						req.session.save()
+					})
+					return
 				}
 			})
 	}
 
-	// Hamza edit
-	// Error when registering for first time
-	// TODO Need to fix this!
+	// Hamza edited
 	register(req: express.Request, res: express.Response): void {
-		var is_renter = req.query.is_renter == "true";
-		console.log("is het een renter? ", is_renter)
-		db.query(`SELECT COUNT(*) as matching_email 
-				 FROM user WHERE email = "${req.body.email}";
-				 SELECT COUNT(*) as matching_username
-				 FROM user WHERE username = "${req.body.username}"`,
+		const first_name = req.body.fname
+		const last_name = req.body.lname
+		const email = req.body.email
+		const dateofbirth = req.body.dateofbirth
+		const username = req.body.username
+		const password = req.body.password
+		const is_renter = req.body.is_renter
+		const is_owner = req.body.is_owner
+
+		// Checking form ((is_renter == undefined && dateofbirth == undefined) || is_owner == undefined) || (is_owner == undefined && is_renter == undefined)
+		if(first_name == undefined || last_name == undefined || email == undefined || username == undefined || password == undefined || (is_renter !== undefined && is_owner !== undefined) || (is_renter !== undefined && dateofbirth == undefined)){
+			res.json({ "success": false, 'errorMsg': 'Invalid form' })
+			return
+		}
+
+		// Queries
+		const query_checkMail = `SELECT COUNT(*) as matching_email FROM user WHERE email = "${email}";`
+		const query_checkUsername = `SELECT COUNT(*) as matching_username FROM user WHERE username = "${username}"`
+
+		db.query(query_checkMail+query_checkUsername,
 			[1, 2],
 			(err, results) => {
-				if (err) throw err;
+				if (err){
+					res.json({ "success": false, 'errorMsg': 'Error occured with sql request' })
+					return
+				}
+
+				// Booleans that indicates wheteher or not email or username are already in use
 				var email_exists = results[0][0].matching_email > 0
 				var username_exists = results[1][0].matching_username > 0
 
-				if (!(email_exists || username_exists)) {
-					this.register_user(req.body.firstname, req.body.lastname, req.body.username, req.body.password, req.body.email, req.body.dateofbirth, false);
-					res.json({
-						"succes": true,
-						"email_taken": false,
-						"username_exists": false
-					})
+				if(email_exists){
+					res.json({ "success": false, 'errorMsg': 'Error: email adress already in use!' })
+					return
 				}
-				else {
-					res.json({
-						"succes": false,
-						"email_taken": email_exists,
-						"username_exists": username_exists
-					})
+
+				if(username_exists){
+					res.json({ "success": false, 'errorMsg': 'Error: username already in use!' })
+					return
 				}
+
+				this.register_user(req, res, first_name, last_name, username, password, email, dateofbirth, is_renter, is_owner);
+				//res.json({ "success": true, 'errorMsg': 'No error' })
 			})
 	}
 
-	// /api/profile[post] (bilal)
-	//     in: (username)
-	//     out: 
-	//     username
-	//     first_name
-	//     last_name
-	//     email
-	//     dateofbirth: NULL if it is a owner
+	// Hamza created
+	// route used when frontend wants to know whether or not there user was already connected
+	isUserAlreadyConnected(req: express.Request, res: express.Response): void {
+		if(req.session.userInfo !== undefined) {
+			res.json({
+				logged: true,
+				userid: req.session.userInfo.userid,
+				is_renter: req.session.userInfo.is_renter,
+				is_owner: req.session.userInfo.is_owner,
+				firstname: req.session.userInfo.firstname,
+				lastname: req.session.userInfo.lastname,
+				email: req.session.userInfo.email
+			})
+			return
+		}
+		res.json({
+			logged: false
+		})
+	}
 
+	// /api/profile[post] (bilal)
+	// Edited by Hamza
 	profile(req: express.Request, res: express.Response): void {
-		db.query(`SELECT * FROM User JOIN Renter ON User.user_id = Renter.user_id WHERE username = "${req.body.username}" ;
-				  SELECT * FROM User JOIN Owner  ON User.user_id = Owner.user_id WHERE username = "${req.body.username}"`,
+		const username = req.params.username
+
+		if(username == undefined){
+			res.json({ "success": false, 'errorMsg': 'Invalid form' })
+			return
+		}
+
+		const query_userIsRenter = `SELECT * FROM User JOIN Renter ON User.user_id = Renter.user_id WHERE username = "${username}";`
+		const query_userIsOwner = `SELECT * FROM User JOIN Owner  ON User.user_id = Owner.user_id WHERE username = "${username}"`
+
+		db.query(query_userIsRenter+query_userIsOwner,
 			[1, 2],
 			(err, results) => {
-				if (err) throw err;
+				if (err){
+					res.json({ "success": false, 'errorMsg': 'Error occured with sql request' })
+					return
+				}
+
+				if(results[0].length > 0 || results[1].length > 0){
+					// Profile is a renter
+					if(results[0].length > 0){
+						const renter = results[0][0]
+						res.json({
+							"success": true,
+							"username": renter.username,
+							"first_name": renter.first_name,
+							"last_name": renter.last_name,
+							"email": renter.email,
+							"dateofbirth": renter.date_of_birth,
+							"is_owner": false,
+							"is_renter": true
+						})
+						return
+					}
+					// Profile is a owner
+					if(results[1].length > 0){
+						const owner = results[1][0]
+						res.json({
+							"success": true,
+							"username": owner.username,
+							"first_name": owner.first_name,
+							"last_name": owner.last_name,
+							"email": owner.email,
+							"dateofbirth": owner.date_of_birth,
+							"is_owner": true,
+							"is_renter": false
+						})
+						return
+					}
+				} else {
+					res.json({
+						"success": false
+					})
+					return
+				}
+
 				var matching_renter = results[0][0]
 				var matching_owner = results[1][0]
 				var is_renter = matching_renter != null
 				var wrong_username = matching_renter == null && matching_owner == null
 				var table = is_renter ? matching_renter : matching_owner
+
 				res.json({
 					"username": wrong_username ? null : table.username,
 					"first_name": wrong_username ? null : table.first_name,
 					"last_name": wrong_username ? null : table.last_name,
 					"email": wrong_username ? null : table.last_name,
-					"dateofbirth": is_renter ? table.age : null
+					"dateofbirth": is_renter ? table.age : null,
+					"is_owner": false,
+					"is_renter": false
 				})
-
-
 			})
 	}
 
-
-
-	actually_edit_profile(req: express.Request, res: express.Response, is_renter): void {
+	// Hamza Checkpoint
+	actually_edit_profile(req: express.Request, res: express.Response, is_renter, is_owner): void {
 		var update_renter = is_renter && !(req.body.new_dateofbirth === "false");
 		db.query(`WITH temp AS (SELECT * FROM USER ) 
 					  UPDATE USER SET
@@ -280,7 +380,7 @@ export class ApiController extends BaseController {
 	}
 
 	//first check if new email already in use, 
-	editProfile(req: express.Request, res: express.Response): void {
+	/*editProfile(req: express.Request, res: express.Response): void {
 		db.query(
 			`SELECT COUNT(*) as matching_email FROM user WHERE email = "${req.body.new_email}";
 				SELECT COUNT(*) as matching_renter
@@ -302,6 +402,53 @@ export class ApiController extends BaseController {
 				else this.actually_edit_profile(req, res, is_renter);
 
 			})
+	}*/
+
+	// NOT FINISHED!!!!!!!!!
+	editProfile(req: express.Request, res: express.Response): void {
+		if(req.session.userInfo == undefined){
+			res.send({
+				success: false,
+				errorMsg: "You are not connected!"
+			})
+			return
+		}
+
+		const firstname = req.body.firstname
+		const lastname = req.body.lastname
+		const email = req.body.email
+		const password = req.body.password
+		const is_renter = req.body.is_renter
+		const is_owner = req.body.is_owner
+
+		if(firstname == undefined || lastname == undefined || email == undefined || password == undefined || is_renter == undefined || is_owner == undefined){
+			res.send({
+				success: false,
+				errorMsg: "Invalid form!"
+			})
+			return
+		}
+		
+		
+		if(is_renter){
+			res.send({
+				success: true,
+				errorMsg: "No error"
+			})
+			return
+		}
+		if(is_owner){
+			res.send({
+				success: true,
+				errorMsg: "No error"
+			})
+			return
+		}
+
+		res.send({
+			success: false,
+			errorMsg: "Error occured when updating!"
+		})
 	}
 
 

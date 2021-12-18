@@ -3,4 +3,7 @@ export interface UserInfo {
     userid: number;
     is_owner: boolean;
     is_renter: boolean;
+    firstname: String;
+    lastname: String;
+    email: String;
 }

@@ -35,7 +35,6 @@ export class App {
     }
 
     private _initializeMiddleware(): void {
-        this.app.use(cookieParser())
         this.app.use(session({ 
             secret: 'SecretPassword',
             resave: false,
