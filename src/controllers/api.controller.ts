@@ -113,7 +113,7 @@ export class ApiController extends BaseController {
 							"is_owner": false,
 							'errorMsg': "No error"
 						})
-						req.session.userInfo = { logged: true, userid: userinfo.user_id, is_owner: false, is_renter: true, firstname: userinfo.first_name, lastname: userinfo.last_name, email: userinfo.email}
+						req.session.userInfo = { logged: true, userid: userinfo.user_id, is_owner: false, is_renter: true, firstname: userinfo.first_name, lastname: userinfo.last_name, email: userinfo.email, password}
 						req.session.save()
 						return
 					}
@@ -126,7 +126,7 @@ export class ApiController extends BaseController {
 							"is_owner": true,
 							'errorMsg': "No error"
 						})
-						req.session.userInfo = { logged: true, userid: userinfo.user_id, is_owner: true, is_renter: false, firstname: userinfo.first_name, lastname: userinfo.last_name, email: userinfo.email}
+						req.session.userInfo = { logged: true, userid: userinfo.user_id, is_owner: true, is_renter: false, firstname: userinfo.first_name, lastname: userinfo.last_name, email: userinfo.email, password}
 						req.session.save()
 						return
 					}
@@ -183,10 +183,7 @@ export class ApiController extends BaseController {
 							res.json({ "success": false, 'errorMsg': 'Error occured with sql request' })
 							return
 						}
-						res.json({
-							"success": true,
-							'errorMsg': "No error"
-						})
+						res.json({ "success": true, 'errorMsg': "No error" })
 						req.session.userInfo = { logged: true, userid: user_id, is_owner: true, is_renter: false}
 						req.session.save()
 					})
@@ -224,7 +221,7 @@ export class ApiController extends BaseController {
 					return
 				}
 
-				// Booleans that indicates wheteher or not email or username are already in use
+				// Booleans that indicates whether or not email or username are already in use
 				var email_exists = results[0][0].matching_email > 0
 				var username_exists = results[1][0].matching_username > 0
 
@@ -238,8 +235,8 @@ export class ApiController extends BaseController {
 					return
 				}
 
+				// This help function returns json to client using res
 				this.register_user(req, res, first_name, last_name, username, password, email, dateofbirth, is_renter, is_owner);
-				//res.json({ "success": true, 'errorMsg': 'No error' })
 			})
 	}
 
@@ -315,96 +312,16 @@ export class ApiController extends BaseController {
 						})
 						return
 					}
-				} else {
-					res.json({
-						"success": false
-					})
-					return
 				}
-
-				var matching_renter = results[0][0]
-				var matching_owner = results[1][0]
-				var is_renter = matching_renter != null
-				var wrong_username = matching_renter == null && matching_owner == null
-				var table = is_renter ? matching_renter : matching_owner
-
 				res.json({
-					"username": wrong_username ? null : table.username,
-					"first_name": wrong_username ? null : table.first_name,
-					"last_name": wrong_username ? null : table.last_name,
-					"email": wrong_username ? null : table.last_name,
-					"dateofbirth": is_renter ? table.age : null,
-					"is_owner": false,
-					"is_renter": false
+					"success": false,
+					"errorMsg": "Profile not found!"
 				})
 			})
 	}
 
-	// Hamza Checkpoint
-	actually_edit_profile(req: express.Request, res: express.Response, is_renter, is_owner): void {
-		var update_renter = is_renter && !(req.body.new_dateofbirth === "false");
-		db.query(`WITH temp AS (SELECT * FROM USER ) 
-					  UPDATE USER SET
-					  ${req.body.new_first_name === "false" ? `first_name = (SELECT first_name from temp where username = "${req.body.username}"),`
-				: `first_name = "${req.body.new_first_name}",`}
-					 
-					  ${req.body.new_last_name === "false" ? `last_name = (SELECT last_name  from temp where username = "${req.body.username}"),`
-				: `last_name = "${req.body.new_last_name}",`}
-					 
-					  ${req.body.new_email === "false" ? `email = (SELECT email from temp  where username = "${req.body.username}"),`
-				: `email = "${req.body.new_email}",`}
-					 
-					  ${req.body.new_password === "false" ? `password = (SELECT password from temp where username = "${req.body.username}")`
-				: `password   = "${req.body.new_password}"`}
-
-					where user_id = (SELECT user_id FROM temp where username = "${req.body.username}")`,
-			(err, results) => {
-				if (err) throw err;
-				if (!update_renter) {
-					res.json({
-						"email_already_exists": false,
-						"success": true
-					})
-				}
-			})
-
-		if (update_renter) {
-			db.query(`
-				UPDATE RENTER SET age = ${req.body.new_dateofbirth} where user_id = (SELECT user_id from user where username = "${req.body.username}")`,
-				(err, results) => {
-					if (err) throw err;
-					res.json({ "email_already_exists": false, "succes": true })
-				})
-
-		}
-	}
-
-	//first check if new email already in use, 
-	/*editProfile(req: express.Request, res: express.Response): void {
-		db.query(
-			`SELECT COUNT(*) as matching_email FROM user WHERE email = "${req.body.new_email}";
-				SELECT COUNT(*) as matching_renter
-				FROM  User JOIN Renter ON User.user_id = Renter.user_id
-				WHERE username = "${req.body.username}"`,
-			[1, 2],
-			(err, result) => {
-				if (err) throw err;
-				var matching_email = result[0][0].matching_email;
-				var is_renter = result[1][0].matching_renter;
-
-				if (matching_email > 0) {
-					res.json({
-						"email_already_exists": true,
-						"succes": false
-
-					})
-				}
-				else this.actually_edit_profile(req, res, is_renter);
-
-			})
-	}*/
-
-	// NOT FINISHED!!!!!!!!!
+	// Hamza edited
+	// Avoid changing password, hence need to get password
 	editProfile(req: express.Request, res: express.Response): void {
 		if(req.session.userInfo == undefined){
 			res.send({
@@ -413,45 +330,69 @@ export class ApiController extends BaseController {
 			})
 			return
 		}
-
-		const firstname = req.body.firstname
-		const lastname = req.body.lastname
+		
+		const firstname = req.body.fname
+		const lastname = req.body.lname
 		const email = req.body.email
-		const password = req.body.password
-		const is_renter = req.body.is_renter
-		const is_owner = req.body.is_owner
+		const password = (req.body.password == undefined) ? req.session.userInfo.password : req.body.password //If password is not provided, use users password
+		const dateofbirth = req.body.dateofbirth
+		const is_renter = req.session.userInfo.is_renter
+		const is_owner = req.session.userInfo.is_owner
+		const userid = req.session.userInfo.userid
 
-		if(firstname == undefined || lastname == undefined || email == undefined || password == undefined || is_renter == undefined || is_owner == undefined){
+		if(firstname == undefined || lastname == undefined || email == undefined || (is_renter == undefined && dateofbirth == undefined) || is_owner == undefined){
 			res.send({
 				success: false,
 				errorMsg: "Invalid form!"
 			})
 			return
 		}
-		
-		
-		if(is_renter){
-			res.send({
-				success: true,
-				errorMsg: "No error"
-			})
-			return
-		}
-		if(is_owner){
-			res.send({
-				success: true,
-				errorMsg: "No error"
-			})
-			return
-		}
 
-		res.send({
-			success: false,
-			errorMsg: "Error occured when updating!"
+		// Form validation here!
+		if(!(firstname.length > 4)){
+			res.send({
+				success: false,
+				errorMsg: "Invalid!"
+			})
+			return
+		}
+		
+		// Query to update usertable
+		const query_UpdateUserInfo = `UPDATE USER SET first_name = "${firstname}", last_name = "${lastname}", email = "${email}", password = "${password}" WHERE user_id = ${userid}`
+
+		db.query(query_UpdateUserInfo, (err) => {
+			if (err) {
+				res.json({ success: false, errorMsg: 'Error occured!'})
+				throw err
+				return
+			}
+			if(req.session.userInfo.is_owner){
+				res.send({
+					success: true,
+					errorMsg: "No error"
+				})
+				return
+			}
+			if(req.session.userInfo.is_renter){
+				// Query to update informations relative to renters (extra info)
+				const query_UpdateExtraRenter = `UPDATE RENTER SET date_of_birth = "${dateofbirth}" WHERE user_id = ${userid}`
+				db.query(query_UpdateExtraRenter, (err) => {
+					if (err) {
+						res.json({ success: false, errorMsg: 'Error occured!'})
+						throw err
+						return
+					}
+					res.send({
+						success: true,
+						errorMsg: "No error"
+					})
+					return
+				})
+			}
 		})
 	}
 
-
+	// Hamza checkpoint
 	getPost(req: express.Request, res: express.Response): void {
 		var postId = parseInt(req.params.post_id)
 		var renter_id = 0

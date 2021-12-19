@@ -6,4 +6,5 @@ export interface UserInfo {
     firstname: String;
     lastname: String;
     email: String;
+    password: String;
 }
