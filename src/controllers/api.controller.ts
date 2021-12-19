@@ -4,30 +4,9 @@ import { BaseController } from './base.controller';
 import * as h from './helpfile';
 import * as makepost from './makepost'
 
-
 import { Post } from '../models/post.model';
 import { MiniPost } from '../models/mini.post.model';
 import { Reservation } from '../models/reservation.model';
-
-
-const multer = require('multer');
-
-var acceptFile
-const fileFilter = (req, file, cb) => {
-	if (file.mimetype === 'image/jpg' || file.mimetype === 'image/png') {
-		acceptFile = true
-		cb(null, true)
-	}
-	else {
-		acceptFile = false
-		cb(null, false)
-	}
-}
-
-const upload = multer({
-	dest: "static",
-	fileFilter: fileFilter
-})
 
 export class ApiController extends BaseController {
 
@@ -46,7 +25,7 @@ export class ApiController extends BaseController {
 		this.router.post("/makePost", makepost.makePost.bind(this))
 		this.router.post("/addImagePost", makepost.AddImagePost.bind(this))
 		this.router.post("/addField", makepost.addField.bind(this))
-		this.router.post("/uploadImage", upload.single('image'), this.uploadImage.bind(this))
+		this.router.post("/uploadImage", this.imageUpload.bind(this))
 
 		this.router.get("/getPost/:post_id", this.getPost.bind(this));
         this.router.get("/getPosts", this.getPosts.bind(this));
@@ -55,18 +34,32 @@ export class ApiController extends BaseController {
 
 		this.router.get("/connected", this.isUserAlreadyConnected.bind(this))
 		this.router.get("/logout", this.logout.bind(this))
+		this.router.get("/tags", this.getTags.bind(this))
 	}
 
-	uploadImage(req, res): void {
-		console.log(req.file)
-		if (acceptFile) {
-			db.query(`INSERT INTO Image VALUES ("${req.file.filename}", null)`, //of req.file.path
-				(err, result) => {
-					if (err) throw err;
-					res.json({
-						image_id: result.insertID
+	//Hamza edited
+	imageUpload(req: express.Request, res: express.Response): void {
+		try {
+			if(req.files['thumbnail'] && (req.files['thumbnail'].mimetype === 'image/jpg' || req.files['thumbnail'].mimetype === 'image/png')){
+				db.query("SELECT COUNT(image_id) as amount FROM image;", (err, result) => {
+					const thumbnail = req.files['thumbnail'];
+					const imageCount = (result[0].amount + 1)
+					const filename = req.session.userInfo.username+'_'+imageCount+'.png'
+					const imageURL = '/images/'+filename
+					db.query(`INSERT INTO Image VALUES ("${imageURL}", null)`, (err, result) => {
+						if (err) {
+							res.status(500).json({ success: false, errorMsg: "Error, cant upload image!"})
+							return
+						}
+						thumbnail.mv(imageURL);
+						res.status(200).json({ success: true, errorMsg: "Thumbnail uploaded successfully! "})
 					})
 				})
+			} else {
+				res.status(404).json({ success: false, errorMsg: "Error, file not found!"})
+			}
+		} catch (error) {
+			res.status(500).json({ success: false, errorMsg: "Error, cant upload image!"})
 		}
 	}
 
@@ -104,29 +97,33 @@ export class ApiController extends BaseController {
 					return
 				}
 
+				console.log(results);
+				// Check if renter was found
 				if(results[0].length > 0) {
 					const userinfo = results[0][0]
 					if(userinfo.password == password){
 						res.json({
 							"success": true,
-							"is_renter": true,
-							"is_owner": false,
+							"is_renter": (userinfo.renter_id !== undefined),
+							"is_owner": (userinfo.owner_id !== undefined),
 							'errorMsg': "No error"
 						})
-						req.session.userInfo = { logged: true, userid: userinfo.user_id, is_owner: false, is_renter: true, firstname: userinfo.first_name, lastname: userinfo.last_name, email: userinfo.email, password}
+						req.session.userInfo = { logged: true, userid: userinfo.user_id, is_owner: (userinfo.owner_id !== undefined), is_renter: (userinfo.renter_id !== undefined), firstname: userinfo.first_name, lastname: userinfo.last_name, email: userinfo.email, password, username}
 						req.session.save()
 						return
 					}
-				} else {
+				}
+				// Check if owner was found
+				if(results[1].length > 0){
 					const userinfo = results[1][0]
 					if(userinfo.password == password){
 						res.json({
 							"success": true,
-							"is_renter": false,
-							"is_owner": true,
+							"is_renter": (userinfo.renter_id !== undefined),
+							"is_owner": (userinfo.owner_id !== undefined),
 							'errorMsg': "No error"
 						})
-						req.session.userInfo = { logged: true, userid: userinfo.user_id, is_owner: true, is_renter: false, firstname: userinfo.first_name, lastname: userinfo.last_name, email: userinfo.email, password}
+						req.session.userInfo = { logged: true, userid: userinfo.user_id, is_owner: (userinfo.owner_id !== undefined), is_renter: (userinfo.renter_id !== undefined), firstname: userinfo.first_name, lastname: userinfo.last_name, email: userinfo.email, password, username}
 						req.session.save()
 						return
 					}
@@ -244,6 +241,7 @@ export class ApiController extends BaseController {
 	// route used when frontend wants to know whether or not there user was already connected
 	isUserAlreadyConnected(req: express.Request, res: express.Response): void {
 		if(req.session.userInfo !== undefined) {
+			console.log(req.session.userInfo)
 			res.json({
 				logged: true,
 				userid: req.session.userInfo.userid,
@@ -389,6 +387,18 @@ export class ApiController extends BaseController {
 					return
 				})
 			}
+		})
+	}
+
+	// Hamza added
+	// Get sport tags for frontend
+	getTags(req: express.Request, res: express.Response): void {
+		db.query("SELECT sport_name FROM sport", (err, result) => {
+			if (err) {
+				res.json({"success": false, 'errorMsg': "Error with sql!"})
+				return
+			}
+			res.json({ tags: result.map(x => x.sport_name)})
 		})
 	}
 

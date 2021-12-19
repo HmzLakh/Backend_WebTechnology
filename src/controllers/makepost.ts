@@ -248,3 +248,23 @@ function addField(req: express.Request, res: express.Response): void {
 
 export { makePost, AddImagePost, addField, }
 
+
+function createPost(req: express.Request, res: express.Response): void {
+    if(req.session.userInfo && !req.session.userInfo.is_owner){
+        res.json({"success": false, "errorMsg": "You are not connected or you are not a owner"})
+        return
+    }
+    const name = req.body.name
+    const address = req.body.address
+    const description = req.body.description
+    const thumbnail_id = req.body.thumbnail_id
+    const images_id_array = req.body.images
+    const fields_array = req.body.fields
+    if(name == undefined || address == undefined || description == undefined || thumbnail_id == undefined || fields_array == undefined || images_id_array == undefined){
+        res.json({"success": false, "errorMsg": "Invalid form!"})
+        return
+    }
+
+    
+
+}

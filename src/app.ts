@@ -1,8 +1,8 @@
 import * as express from 'express';
 import * as session from 'express-session';
 import * as cors from 'cors';
-import * as bodyParser from 'body-parser';
-import * as cookieParser from 'cookie-parser';
+import * as fileUpload from 'express-fileupload';
+
 import { BaseController } from "./controllers/base.controller";
 import { ApiController } from "./controllers/api.controller";
 import * as path from 'path';
@@ -43,6 +43,9 @@ export class App {
         this.app.use(cors({credentials: true, origin: 'http://localhost:8080'}));
         this.app.use(express.urlencoded({ extended: true }));
         this.app.use(express.static(path.join(__dirname, "../static"))); // Location for frontend
+        this.app.use(fileUpload({
+            createParentPath: true
+        }));
     }
 
     public listen() {
