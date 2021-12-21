@@ -30,13 +30,18 @@ export class ApiController extends BaseController {
 
 		this.router.get("/getPost/:post_id", this.getPost.bind(this));
         this.router.get("/getPosts", this.getPosts.bind(this));
-        this.router.put("/editPost", this.editPost.bind(this));
-        this.router.put("/editFields", this.editPost.bind(this));
+        this.router.put("/post", this.editPost.bind(this));
+		this.router.post("/deletepost", this.deletepost.bind(this));
 
 		this.router.get("/connected", this.isUserAlreadyConnected.bind(this))
 		this.router.get("/logout", this.logout.bind(this))
 		this.router.get("/tags", this.getTags.bind(this))
 		this.router.get("/image/:id", this.image.bind(this))
+		this.router.get("/getMyPosts", this.getMyPosts.bind(this))
+		this.router.get("/getMyPost/:postid", this.getMyPost.bind(this))
+		this.router.get("/getMap", this.getMapPosts.bind(this))
+		this.router.post("/review", this.makeReview.bind(this))
+		this.router.post("/opinion", this.makeOpinion.bind(this))
 	}
 
 	//Hamza edited
@@ -46,10 +51,11 @@ export class ApiController extends BaseController {
 			return
 		}
 		try {
+			console.log(req.session.userInfo);
 			if(req.files['thumbnail'] && req.files['thumbnail'].mimetype.includes('image')){
 				db.query("SELECT COUNT(image_id) as amount FROM image;", (err, result) => {
 					const thumbnail = req.files['thumbnail'];
-					const imageCount = (result[0].amount + 2)
+					const imageCount = (result[0].amount + 1)
 					const filename = req.session.userInfo.username+'_'+imageCount+'.png'
 					const saveurl = './static/images/' + filename
 					const imageURL = '/images/'+filename
@@ -74,6 +80,7 @@ export class ApiController extends BaseController {
 		}
 	}
 
+	// Route used to get a single image linked in the database
 	image(req: express.Request, res: express.Response): void {
 		const imageid = req.params.id
 		db.query(`SELECT image_url FROM image WHERE image_id = ${imageid}`, (err, result) => {
@@ -85,7 +92,7 @@ export class ApiController extends BaseController {
 		})
 	}
 
-	// Hamza edited
+	// Route used to login
 	login(req: express.Request, res: express.Response): void {
 		const username = req.body.username
 		const password = req.body.password
@@ -156,7 +163,6 @@ export class ApiController extends BaseController {
 			});
 		}
 
-	// Hamza edited
 	// Destroys session of user
 	logout(req: express.Request, res: express.Response): void {
 		if(req.session.userInfo !== undefined) {
@@ -171,7 +177,7 @@ export class ApiController extends BaseController {
 		}
 	}
 
-	// Hamza edited
+	// Helpfunction for registerroute
 	register_user(req, res, firstname, lastname, username, password, email, dateofbirth, is_renter, is_owner): void {
 		db.query(`INSERT INTO User VALUES(NULL,"${username}","${firstname}","${lastname}","${email}", "${password}")`,
 			function (error, result) {
@@ -210,7 +216,7 @@ export class ApiController extends BaseController {
 			})
 	}
 
-	// Hamza edited
+	// Register route for registering a user or owner
 	register(req: express.Request, res: express.Response): void {
 		const first_name = req.body.fname
 		const last_name = req.body.lname
@@ -258,8 +264,7 @@ export class ApiController extends BaseController {
 			})
 	}
 
-	// Hamza created
-	// route used when frontend wants to know whether or not there user was already connected
+	// Route used when frontend wants to know whether or not there user was already connected
 	isUserAlreadyConnected(req: express.Request, res: express.Response): void {
 		if(req.session.userInfo !== undefined) {
 			res.json({
@@ -338,7 +343,6 @@ export class ApiController extends BaseController {
 			})
 	}
 
-	// Hamza edited
 	// Avoid changing password, hence need to get password
 	editProfile(req: express.Request, res: express.Response): void {
 		if(req.session.userInfo == undefined){
@@ -410,7 +414,6 @@ export class ApiController extends BaseController {
 		})
 	}
 
-	// Hamza added
 	// Get sport tags for frontend
 	getTags(req: express.Request, res: express.Response): void {
 		db.query("SELECT sport_name FROM sport", (err, result) => {
@@ -422,9 +425,9 @@ export class ApiController extends BaseController {
 		})
 	}
 
-	// Taha!
+	// Route used to create a post as a owner
 	createPost(req: express.Request, res: express.Response): void {
-		if(req.session.userInfo && !req.session.userInfo.is_owner){
+		if(req.session.userInfo == undefined || req.session.userInfo.is_owner == false || req.session.userInfo.is_owner == undefined){
 			res.json({"success": false, "errorMsg": "You are not connected or you are not a owner"})
 			return
 		}
@@ -436,13 +439,14 @@ export class ApiController extends BaseController {
 		const thumbnail_id = req.body.thumbnail
 		const images_id_array = req.body.images
 		const fields_array = req.body.fields
+		const phonenumber = req.body.phonenumber
 
 		if(name == undefined || address == undefined || description == undefined || thumbnail_id == undefined || fields_array == undefined || images_id_array == undefined){
 			res.json({"success": false, "errorMsg": "Invalid form!"})
 			return
 		} 
 
-		var qry = `INSERT INTO Post VALUES(NULL, ?, ?, ?, (SELECT o.owner_id FROM USER AS u INNER JOIN Owner AS o ON u.user_id = o.user_id WHERE o.user_id = ${user_id}));`
+		var qry = `INSERT INTO Post VALUES(NULL, ?, ?, ?, (SELECT o.owner_id FROM USER AS u INNER JOIN Owner AS o ON u.user_id = o.user_id WHERE o.user_id = ${user_id}), "${phonenumber}");`
 		var qryAddImages = `INSERT INTO ImagePost VALUES (${thumbnail_id}, (SELECT max(post_id) FROM Post), COALESCE((SELECT max(incr_id) FROM (SELECT * FROM ImagePost) AS ImagePost2 WHERE ImagePost2.post_id = (SELECT max(post_id) FROM Post)), 0) + 1); `
 
 		for (let i = 0; i < images_id_array.length; i++) { 
@@ -456,7 +460,7 @@ export class ApiController extends BaseController {
 			const name = field.name
 			const price = field.price
 			const recommendedNumberOfPersons = field.recommended
-			const addedSports = field.tags
+			const addedSports = field.tags !== undefined  ? field.tags : []
 			qryUpdate += `INSERT INTO Field VALUES(NULL, (SELECT max(post_id) FROM Post), "${name}", "${price}", "${recommendedNumberOfPersons}"); `
 			for (let i = 0; i < addedSports.length; i++) { 
 				const sportName = addedSports[i]
@@ -474,19 +478,78 @@ export class ApiController extends BaseController {
 	
 	}
 
-	// Hamza checkpoint, not here yet!
+	// Used when a owner wants to see his posts
+	// Returns list of posts of a owner
+	getMyPosts(req: express.Request, res: express.Response): void {
+		if(req.session.userInfo == undefined || req.session.userInfo.is_owner == false || req.session.userInfo.is_owner == undefined){
+			res.json({"success": false, "errorMsg": "You are not connected or you are not a owner"})
+			return
+		}
+		const user_id = req.session.userInfo.userid
+		var qry = `SELECT p.post_id, o.owner_id, p.name, u.username, AVG(r.rating) AS rating,GROUP_CONCAT(DISTINCT s.sport_name) AS sports_names, i.image_id, MIN(f.price) as min_price, MAX(f.price) as max_price FROM Post AS p INNER JOIN Owner AS o ON p.owner_id = o.owner_id INNER JOIN User AS u ON o.user_id = u.user_id LEFT OUTER JOIN Review AS r ON p.post_id = r.post_id LEFT OUTER JOIN Field AS f ON p.post_id = f.post_id LEFT OUTER JOIN FieldType AS ft ON f.field_id = ft.field_id LEFT OUTER JOIN Sport AS s ON s.sport_id = ft.sport_id LEFT OUTER JOIN ImagePost AS ip ON p.post_id = ip.post_id LEFT OUTER JOIN Image AS i ON ip.image_id = i.image_id WHERE incr_id = 1  AND o.user_id = "${user_id}" GROUP BY p.post_id; `
+        db.query( qry, function(err, results) {
+			if (err){
+				res.status(500).json({success: false, errorMsg: "Error with sql!"})
+				return
+			}
+			var miniPosts = [];
+			for (let i = 0; i < results.length; i++) { 
+				const miniPost = {
+					"post_id": results[i].post_id,
+					"title": results[i].name,
+					"image": results[i].image_id
+					} as MiniPost;
+				miniPosts[i] = miniPost; 
+			}
+			res.json(miniPosts)	
+		  });
+	}
+
+	// Get my posts in order to fetch informations about a single post!
+	getMyPost(req: express.Request, res: express.Response): void {
+		if(req.session.userInfo == undefined || req.session.userInfo.is_owner == false || req.session.userInfo.is_owner == undefined){
+			res.json({"success": false, "errorMsg": "You are not connected or you are not a owner"})
+			return
+		}
+		var postId = parseInt(req.params.postid)
+		var renter_id = 0
+		var post = "SELECT p.post_id, owner_id, name, address, information, AVG(rating) FROM Post AS p LEFT OUTER JOIN Review AS r ON p.post_id = r.post_id WHERE p.post_id = ? GROUP BY p.post_id; "
+		var images = "SELECT i.image_id FROM Image AS i INNER JOIN ImagePost AS ip ON i.image_id = ip.image_id WHERE post_id = ?; "
+		var sports = "SELECT DISTINCT sport_name FROM Post AS p INNER JOIN Field AS f ON f.post_id = p.post_id INNER JOIN FieldType AS ft ON ft.field_id = f.field_id INNER JOIN Sport AS s ON s.sport_id = ft.sport_id WHERE p.post_id = ?; "
+		var fields = `SELECT f.field_id, f.name, f.price, f.recommended_number_of_persons, GROUP_CONCAT(DISTINCT s.sport_name) AS sports_names FROM Field AS f LEFT OUTER JOIN FieldType AS ft ON ft.field_id = f.field_id LEFT OUTER JOIN Sport AS s ON s.sport_id = ft.sport_id WHERE f.post_id = ${postId} GROUP BY f.field_id;`
+        db.query(post + images + sports+ fields  ,[postId, postId, postId, renter_id, postId, postId], function(err, results) {
+			if (err || results[0].length == 0){
+				res.status(500).json({success: false, errorMsg: "Error with sql!"})
+				return
+			}
+			for (const field of results[3]) {
+				field.sports_names = field.sports_names.split(',')
+			}
+			const post = {
+				name: results[0][0].name,
+				thumbnail: results[1][0].image_id,
+				images: results[1].slice(1),
+				address: results[0][0].address,
+				description: results[0][0].information,
+				fields: results[3]
+			} as unknown as Post; 
+			res.status(200).json(post)	
+		  });
+	}
+
+	// Used to show a post to user!
 	getPost(req: express.Request, res: express.Response): void {
 		var postId = parseInt(req.params.post_id)
-		var renter_id = 0
 		//var renter_id = (req.body.renter_id !== undefined) ? 0 : 0 //if logged
-		var post = "SELECT p.post_id, owner_id, name, address, information, AVG(rating) FROM Post AS p LEFT OUTER JOIN Review AS r ON p.post_id = r.post_id WHERE p.post_id = ? GROUP BY p.post_id; "
-        var images = "SELECT image_url FROM Image AS i INNER JOIN ImagePost AS ip ON i.image_id = ip.image_id WHERE post_id = ?; "
+		var post = "SELECT p.post_id, owner_id, name, address, information, AVG(rating), phone_number FROM Post AS p LEFT OUTER JOIN Review AS r ON p.post_id = r.post_id WHERE p.post_id = ? GROUP BY p.post_id; "
+        var images = "SELECT i.image_id FROM Image AS i INNER JOIN ImagePost AS ip ON i.image_id = ip.image_id WHERE post_id = ?; "
         var sports = "SELECT DISTINCT sport_name FROM Post AS p INNER JOIN Field AS f ON f.post_id = p.post_id INNER JOIN FieldType AS ft ON ft.field_id = f.field_id INNER JOIN Sport AS s ON s.sport_id = ft.sport_id WHERE p.post_id = ?; "
-        var reviews = "SELECT r.review_id, r.renter_id, r.content, r.date_time, r.rating, SUM(O.opinion) AS votes , n.votedby FROM Review AS r INNER JOIN Post AS p ON p.post_id = r.post_id INNER JOIN Renter AS re ON r.renter_id = re.renter_id INNER JOIN ImageUser AS iu ON iu.user_id = re.user_id INNER JOIN Image AS i ON i.image_id = iu.image_id  LEFT OUTER JOIN Opinion AS o ON o.review_id = r.review_id LEFT OUTER JOIN (SELECT r2.review_id, o2.opinion AS votedby FROM Opinion AS o2 INNER JOIN Review AS r2 ON r2.review_id = o2.review_id WHERE o2.renter_id = ?  GROUP BY r2.review_id) AS n ON r.review_id = n.review_id WHERE p.post_id = ? GROUP BY r.review_id ORDER BY votes DESC; "
+        var reviews = `SELECT r.review_id, r.renter_id, u.username, r.content, r.date_time, r.rating, SUM(O.opinion) AS votes FROM Review AS r INNER JOIN Post AS p ON p.post_id = r.post_id INNER JOIN Renter AS re ON r.renter_id = re.renter_id INNER JOIN User AS u ON u.user_id = re.user_id LEFT OUTER JOIN ImageUser AS iu ON iu.user_id = re.user_id LEFT OUTER JOIN Image AS i ON i.image_id = iu.image_id LEFT OUTER JOIN Opinion AS o ON o.review_id = r.review_id WHERE p.post_id = ${postId} GROUP BY r.review_id ORDER BY votes DESC;`
         var fields = "SELECT f.field_id, f.name, f.price, f.recommended_number_of_persons, GROUP_CONCAT(DISTINCT s.sport_name) AS sports_names FROM Field AS f INNER JOIN FieldType AS ft ON ft.field_id = f.field_id INNER JOIN Sport AS s ON s.sport_id = ft.sport_id WHERE f.post_id = ? GROUP BY f.field_id;"
-        db.query(post + images + sports+ reviews + fields  ,[postId, postId, postId, renter_id, postId, postId], function(err, results) {
+        db.query(post + images + sports+ reviews + fields  ,[postId, postId, postId, postId, postId], function(err, results) {
 			if (err) {
-				res.json({ success: "false", errorMsg:"post not found!"})
+				res.json({ success: "false", errorMsg:"SQL error!"})
+				throw err
 				return
 			}
 			
@@ -494,20 +557,22 @@ export class ApiController extends BaseController {
 				"succes": true,
 				"post_id": postId,
 				"name": results[0][0].name,
-    			"images": results[1],
+    			"images": results[1].map(x => x.image_id),
    				"address": results[0][0].address,
    				"description": results[0][0].information,
 				"sports": results[2].map(x => x.sport_name),
     			"rating": results[0][0],
     			"reviews": results[3],
-				"fields": results[4]
+				"fields": results[4],
+				"phonenumber": results[0][0].phone_number
 				} as Post;
 			res.json(post)	
 		  });
 	}
 	
+	// Get posts for frontpage
 	getPosts(req: express.Request, res: express.Response): void {
-		var qry = "SELECT p.post_id, o.owner_id, p.name, u.username, AVG(r.rating) AS rating,GROUP_CONCAT(DISTINCT s.sport_name) AS sports_names, i.image_url, MIN(f.price) as min_price, MAX(f.price) as max_price FROM Post AS p INNER JOIN Owner AS o ON p.owner_id = o.owner_id INNER JOIN User AS u ON o.user_id = u.user_id LEFT OUTER JOIN Review AS r ON p.post_id = r.post_id LEFT OUTER JOIN Field AS f ON p.post_id = f.post_id LEFT OUTER JOIN FieldType AS ft ON f.field_id = ft.field_id LEFT OUTER JOIN Sport AS s ON s.sport_id = ft.sport_id LEFT OUTER JOIN ImagePost AS ip ON p.post_id = ip.post_id INNER JOIN Image AS i ON ip.image_id = i.image_id WHERE incr_id = 1  GROUP BY p.post_id;" 
+		var qry = "SELECT p.post_id, o.owner_id, p.name, u.username, AVG(r.rating) AS rating,GROUP_CONCAT(DISTINCT s.sport_name) AS sports_names, i.image_id, MIN(f.price) as min_price, MAX(f.price) as max_price FROM Post AS p INNER JOIN Owner AS o ON p.owner_id = o.owner_id INNER JOIN User AS u ON o.user_id = u.user_id LEFT OUTER JOIN Review AS r ON p.post_id = r.post_id LEFT OUTER JOIN Field AS f ON p.post_id = f.post_id LEFT OUTER JOIN FieldType AS ft ON f.field_id = ft.field_id LEFT OUTER JOIN Sport AS s ON s.sport_id = ft.sport_id LEFT OUTER JOIN ImagePost AS ip ON p.post_id = ip.post_id INNER JOIN Image AS i ON ip.image_id = i.image_id WHERE incr_id = 1  GROUP BY p.post_id;" 
         db.query( qry, function(err, results) {
 			if (err) throw err;
 
@@ -520,117 +585,149 @@ export class ApiController extends BaseController {
 					"username": results[i].username,
 					"rating": results[i].rating,
 					"sports": results[i].sports_names,
-					"image": results[i].image_url
+					"image": results[i].image_id
 					} as MiniPost;
 				miniPosts[i] = miniPost; 
 			}
 				res.json(miniPosts)	
 		  });
 	}
-	
+
+	// Maybe edit
 	editPost(req: express.Request, res: express.Response): void {
-		var postId = req.body.post_id
+		console.log(req.body)
+		var postId = req.body.postid
 		var name = req.body.name
-		var address = req.body.address
-		var information = req.body.information
-		var addedImages = req.body.addedImages
-		var deletedImages = req.body.deletedImages
+		var address = req.body.location
+		var information = req.body.description
+		var images = req.body.images
+		var thumbnail_id = req.body.thumbnail
 		var update = "UPDATE Post SET name = ?, address = ?, information = ? WHERE post_id = ?; "
-		var qryDeleteImages = ""
-		for (let i = 0; i < deletedImages.length; i++) { 
-			const image = deletedImages[i]
-			qryDeleteImages += `DELETE ip.*,i.* FROM ImagePost ip JOIN Image i ON ip.image_id = i.image_id WHERE i.image_id = (SELECT i2.image_id FROM (SELECT * FROM Image) AS i2 WHERE i2.image_url = ${image}); ` 
-			
-		
+		var qryDeleteImages = `DELETE ip.* FROM ImagePost ip JOIN Image i ON ip.image_id = i.image_id WHERE ip.post_id = ${postId}; `
+		var qryAddImages = `INSERT INTO ImagePost VALUES (${thumbnail_id}, (SELECT max(post_id) FROM Post), COALESCE((SELECT max(incr_id) FROM (SELECT * FROM ImagePost) AS ImagePost2 WHERE ImagePost2.post_id = (SELECT max(post_id) FROM Post)), 0) + 1); `
+		for (let i = 0; i < images.length; i++) { 
+			const image_id = images[i]
+			qryAddImages += `INSERT INTO ImagePost VALUES (${image_id}, (SELECT max(post_id) FROM Post), COALESCE((SELECT max(incr_id) FROM (SELECT * FROM ImagePost) AS ImagePost2 WHERE ImagePost2.post_id = (SELECT max(post_id) FROM Post)), 0) + 1); `
 		}
-		var qryAddImages = ""
-		for (let i = 0; i < addedImages.length; i++) { 
-			const image = addedImages[i]
-			qryAddImages += `INSERT INTO Image VALUES (${image}, NULL); INSERT INTO ImagePost VALUES ((SELECT i.image_id FROM image AS i WHERE i.image_url = ${image}), ${postId}, (SELECT max(incr_id) FROM (SELECT * FROM ImagePost) AS ImagePost2 WHERE ImagePost2.post_id = ${postId}) + 1); `
-		}
-		
-		db.query(update + qryDeleteImages + qryAddImages,[name, address, information, postId], function(err, results) {
-			if (err) throw err; 
-			res.status(200).json("good")
-		  });
-	}
-	
-	editFields(req: express.Request, res: express.Response): void {
-		var postId = req.body.post_id
-		var fields = req.body.fields
-		var deletedfields = req.body.deletedfields
-		
-		
-		var qryUpdate = ""
+		var fields = req.body.fields == undefined ? [] : req.body.fields
+		var addedFields = req.body.addedFields == undefined ? [] : req.body.addedFields
+		var deletedFields = req.body.deletedFields == undefined ? [] : req.body.deletedFields
+
+		var qryUpdateFields = ""
 		for (let i = 0; i < fields.length; i++) { 
 			const field = fields[i]
-			const fieldId = field.field_id
+			const fieldId = field.id
 			const name = field.name
 			const price = field.price
-			const maxNumberOfPersons = field.recommended_number_of_persons
-			const deletedSports = field.deletedSports
-			const addedSports = field.addedSports
-			qryUpdate += `UPDATE Field SET name = ${name}, price = ${price}, recommended_number_of_persons = ${maxNumberOfPersons} WHERE post_id = ${postId} AND field_id = ${fieldId}; `
+			const maxNumberOfPersons = (field.recommended !== undefined) ? field.recommended : []
+			const addedSports = (field.tags !== undefined) ? field.tags : []
+			qryUpdateFields += `DELETE FROM FieldType AS ft WHERE ft.field_id = ${fieldId};`
+			qryUpdateFields += `UPDATE Field SET name = "${name}", price = ${price}, recommended_number_of_persons = ${maxNumberOfPersons} WHERE post_id = ${postId} AND field_id = ${fieldId}; `
 			for (let i = 0; i < addedSports.length; i++) { 
 				const sportName = addedSports[i]
-				qryUpdate += `INSERT INTO FieldType VALUES((SELECT sport_id FROM Sport WHERE sport_name = ${sportName}), ${fieldId}); `
-			}
-			for (let i = 0; i < deletedSports.length; i++) { 
-				const sportName = deletedSports[i]
-				qryUpdate += `DELETE FROM FieldType AS ft WHERE ft.field_id = ${fieldId} AND sport_id = (SELECT sport_id FROM Sport WHERE sport_name = ${sportName});; `
+				qryUpdateFields += `INSERT INTO FieldType VALUES((SELECT sport_id FROM Sport WHERE sport_name = "${sportName}"), ${fieldId}); `
 			}
 		}
-	
-		var qryDelete= ""
-		for (let i = 0; i < deletedfields.length; i++) { 
-			const fieldId = deletedfields[i]
-			qryDelete += `DELETE ft.*,f.* FROM FieldType ft JOIN Field f ON ft.field_id = f.field_id WHERE ft.field_id = ${fieldId}; `
+
+		var qryDeletefields = ""
+		for (let i = 0; i < deletedFields.length; i++) { 
+			const fieldId = deletedFields[i]
+			qryDeletefields += `DELETE ft.*,f.* FROM FieldType ft JOIN Field f ON ft.field_id = f.field_id WHERE ft.field_id = ${fieldId}; `
 		}
-		
-		db.query(qryUpdate + qryDelete ,[], function(err, results) {
-			if (err) throw err; 
-			res.status(200).json("good")
+
+		var qryAddedFields = ""
+		for (let i = 0; i < addedFields.length; i++) { 
+			const field = addedFields[i]
+			const name = field.name
+			const price = field.price
+			const recommendedNumberOfPersons = field.recommended
+			const addedSports = field.tags
+			qryAddedFields += `INSERT INTO Field VALUES(NULL, (SELECT max(post_id) FROM Post), "${name}", ${price}, ${recommendedNumberOfPersons}); `
+			for (let i = 0; i < addedSports.length; i++) { 
+				const sportName = addedSports[i]
+				qryAddedFields += `INSERT INTO FieldType VALUES((SELECT sport_id FROM Sport WHERE sport_name = "${sportName}"), (SELECT max(field_id) FROM Field)); `
+			}
+		}
+		db.query(update + qryDeleteImages + qryAddImages + qryUpdateFields + qryDeletefields + qryAddedFields, [name, address, information, postId], function(err, results) {
+			if (err) {
+				res.status(500).send({ success: false, errorMsg: "Error sql!"})
+				throw err
+				return
+			}
+			res.status(200).json({ success: true, errorMsg: "no error"})
 		  });
 	}
 	
-	getReservations(req: express.Request, res: express.Response): void {
-		var renterID = req.body.renterID
-		var ownnerID = req.body.ownnerID 
-		//or use userID ???
-
-		// if renter,,,, pas oublié if owner ;)
-		var qry = "SELECT r.reservation_id, re.renter_id, p.post_id, f.field_id, p.name AS post_name, f.name AS field_name, r.date, r.time FROM Reservation r JOIN Renter re ON r.renter_id = re.renter_id JOIN Post p ON p.post_id = r.post_id JOIN Field f ON f.field_id = r.field_id WHERE re.renter_id = ? ORDER BY r.date ASC, r.time ASC; "
-        db.query(qry ,[renterID], function(err, results) {
+	// Get informations used for fancy map
+	getMapPosts(req: express.Request, res: express.Response): void {
+		var qry = `SELECT p.post_id, p.address, p.name, GROUP_CONCAT(DISTINCT s.sport_name) AS sports_names FROM Post AS p LEFT OUTER JOIN Field AS f ON p.post_id = f.post_id LEFT OUTER JOIN FieldType AS ft ON f.field_id = ft.field_id LEFT OUTER JOIN Sport AS s ON s.sport_id = ft.sport_id GROUP BY p.post_id; `
+        db.query( qry, function(err, results) {
 			if (err) throw err;
-			var reservations = [];
-
+			var miniPosts = [];
 			for (let i = 0; i < results.length; i++) { 
-				const reservation = {
-					"reservation_id": results[i].reservation_id,
-					"renter_id": results[i].renter_id,
-					"owner_id": results[i].owner_id,
+				const miniPost = {
 					"post_id": results[i].post_id,
-					"field_id": results[i].field_id,
-					"date": results[i].date,
-					"time": results[i].time,
-					"post_name": results[i].post_name,
-					"field_name": results[i].field_name
-					
-					} as Reservation;
-					reservations[i] = reservation; 
+					"address": results[i].address,
+					"title": results[i].name,
+					"sports": results[i].sports_names !== null ? results[i].sports_names.split(',') : [] 
+					} as unknown as MiniPost;
+				miniPosts[i] = miniPost; 
 			}
-				res.json(reservations)
+				res.json(miniPosts)	
 		  });
 	}
 
+	// Add reviews to a post
+	makeReview(req: express.Request, res: express.Response): void {
+		if(req.session.userInfo == undefined){
+			res.json({"success": false, "errorMsg": "You are not connected"})
+			return
+		} 
+		const user_id = req.session.userInfo.userid
+		const comment = req.body.content
+		const rating = req.body.rating
+		db.query(`INSERT INTO Review VALUES(null, ${req.body.post_id}, (select r.renter_id FROM renter r JOIN user u ON r.user_id = u.user_id WHERE r.user_id = ${user_id}), "${comment}","${new Date().toLocaleDateString() + " " +  new Date().toLocaleTimeString()}", ${rating})`, (err, result) =>{
+				if(err) {
+					res.json({"success": false, "errorMsg": "Error with sql!"})
+					return
+				}
+				res.json({succes: true, error: "No error"})
+		})	
+	}
 
-	/**
-	 * GET request for the user controller. Despite being named "get" you can
-	 * name this function whatever you want (e.g. getUser, ...).
-	 * 
-	 * @param {express.Request} req The GET request
-	 * @param {express.Response} res The response to the request
-	 */
+	// Delete post
+	// Needs to check if user is the owner of the post he wants to delete
+	deletepost(req: express.Request, res: express.Response) {
+		console.log(req.session.userInfo);
+		if(req.session.userInfo == undefined){
+			res.json({ success: false, errorMsg: "You are not connected"})
+			return
+		}
+        var pid = req.body.postid
+        db.query(`delete from post where post_id = ${pid};`, (err) => {
+            if (err) {
+				res.json({ success: false, errorMsg: "Error sql"})
+				return
+			}
+            res.json({ success: true, errorMsg: "No error"})
+        })
+    }
+
+	makeOpinion(req: express.Request, res: express.Response): void {
+		if(req.session.userInfo === undefined) {
+			res.json({"success": false, "errorMsg": "You are not connected or you are not a owner"})
+			return
+		} 
+		const user_id = req.session.userInfo.userid
+		const opinion = req.body.opinion
+		const reviewid = req.body.review_id
+		db.query(`INSERT INTO Opinion VALUES(${reviewid}, (select r.renter_id FROM renter r JOIN user u ON r.user_id = u.user_id WHERE r.user_id = ${user_id}), ${opinion})`,(err, result) => {
+			if (err) {
+				res.json({ success: false, errorMsg: "Error sql"})
+				return
+			}
+			res.json({succes: true, error: "no error"})})
+	}
 
 
 	/**

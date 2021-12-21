@@ -5,6 +5,7 @@ import * as fileUpload from 'express-fileupload';
 
 import { BaseController } from "./controllers/base.controller";
 import { ApiController } from "./controllers/api.controller";
+import { PublicController } from "./controllers/public.controller"
 import * as path from 'path';
 
 export class App {
@@ -23,7 +24,7 @@ export class App {
     private _initializeControllers(): void {
         // Controllers here
         this.addController(new ApiController())
-
+        this.addController(new PublicController())
         // We link the router of each controller to our server
         this.controllers.forEach(controller => {
             this.app.use(`${this.path}${controller.path}`, controller.router);
