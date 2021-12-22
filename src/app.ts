@@ -36,15 +36,15 @@ export class App {
     }
 
     private _initializeMiddleware(): void {
-        this.app.use(session({ 
+        this.app.use(session({ // Express session, used to hold a session between client and server
             secret: 'SecretPassword',
             resave: false,
             saveUninitialized: true
         }));
-        this.app.use(cors({credentials: true, origin: 'http://localhost:8080'}));
-        this.app.use(express.urlencoded({ extended: true }));
-        this.app.use(express.static(path.join(__dirname, "../static"))); // Location for frontend
-        this.app.use(fileUpload({
+        this.app.use(cors({credentials: true, origin: 'http://localhost:8080'})); // Cors in order to make requests
+        this.app.use(express.urlencoded({ extended: true })); // Bodyparser in order to decode body
+        this.app.use(express.static(path.join(__dirname, "../static"))); // Location for frontend that is served statically
+        this.app.use(fileUpload({ // Plugin to let express use formdata body
             createParentPath: true
         }));
     }
