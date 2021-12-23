@@ -48,7 +48,6 @@ export class ApiController extends BaseController {
 			return
 		}
 		try {
-			console.log(req.session.userInfo);
 			if(req.files['thumbnail'] && req.files['thumbnail'].mimetype.includes('image')){
 				db.query("SELECT COUNT(image_id) as amount FROM image;", (err, result) => {
 					const thumbnail = req.files['thumbnail'];
@@ -255,15 +254,15 @@ export class ApiController extends BaseController {
 		}
 		// Queries
 		const query_checkMail = `SELECT COUNT(*) as matching_email FROM user WHERE email = "${email}";`
-		const query_checkUsername = `SELECT COUNT(*) as matching_username FROM user WHERE username = "${username};"`
-		db.query(query_checkMail+query_checkUsername, [1, 2], (err, results) => {
+		const query_checkUsername = `SELECT COUNT(*) as matching_username FROM user WHERE username = "${username}";`
+		db.query(query_checkMail+query_checkUsername, [], (err, results) => {
 			if (err){
 				res.json({ success: false, errorMsg: 'Error occured with sql request' })
 				return
 			}
 			// Booleans that indicates whether or not email or username are already in use
-			var email_exists = results[0][0].matching_email > 0
-			var username_exists = results[1][0].matching_username > 0
+			var email_exists = !(results[0][0].matching_email === 0)
+			var username_exists = !(results[1][0].matching_username === 0)
 			// Form validation: We check if email adress or username is already in use!
 			if(email_exists || username_exists){
 				res.json({ success: false, errorMsg: 'Error: email adress or username is already used!' })
@@ -386,7 +385,7 @@ export class ApiController extends BaseController {
 		// Form validation here!
 		// TODO crée une function séparé pour le form validation!
 		if(!(firstname.length > 4)){
-			res.send({ success: false, errorMsg: "Username has" })
+			res.send({ success: false, errorMsg: "Username must be larger than 4 characters!" })
 			return
 		}
 		
@@ -399,6 +398,12 @@ export class ApiController extends BaseController {
 			}
 			if(req.session.userInfo.is_owner){
 				res.send({ success: true, errorMsg: "No error" })
+				// Update information on current session
+				req.session.userInfo.firstname = firstname
+				req.session.userInfo.lastname = lastname
+				req.session.userInfo.email = email
+				req.session.userInfo.password = password
+				req.session.save()
 				return
 			}
 			if(req.session.userInfo.is_renter){
@@ -410,6 +415,12 @@ export class ApiController extends BaseController {
 						return
 					}
 					res.send({ success: true, errorMsg: "No error" })
+					// Update information on current session
+					req.session.userInfo.firstname = firstname
+					req.session.userInfo.lastname = lastname
+					req.session.userInfo.email = email
+					req.session.userInfo.password = password
+					req.session.save()
 					return
 				})
 			}
@@ -478,10 +489,9 @@ export class ApiController extends BaseController {
 				qryUpdate += `INSERT INTO FieldType VALUES((SELECT sport_id FROM Sport WHERE sport_name = "${sportName}"), (SELECT max(field_id) FROM Field)); `
 			}
 		}
-		db.query(qry + qryAddImages + qryUpdate, [name, address, description], function(err, results) {
+		db.query(qry + qryAddImages + qryUpdate, [name, address, description], function(err) {
 			if (err){
 				res.status(500).json({success: false, errorMsg: "Error with SQL!"})
-				throw err
 				return
 			}
 			res.status(200).json({success: true, errorMsg: "No error"})
@@ -534,7 +544,7 @@ export class ApiController extends BaseController {
 		}
 		var postId = parseInt(req.params.postid)
 		var renter_id = 0
-		var post = "SELECT p.post_id, owner_id, name, address, information, AVG(rating) FROM Post AS p LEFT OUTER JOIN Review AS r ON p.post_id = r.post_id WHERE p.post_id = ? GROUP BY p.post_id; "
+		var post = "SELECT p.post_id, owner_id, name, address, information, AVG(rating), p.phone_number FROM Post AS p LEFT OUTER JOIN Review AS r ON p.post_id = r.post_id WHERE p.post_id = ? GROUP BY p.post_id; "
 		var images = "SELECT i.image_id FROM Image AS i INNER JOIN ImagePost AS ip ON i.image_id = ip.image_id WHERE post_id = ?; "
 		var sports = "SELECT DISTINCT sport_name FROM Post AS p INNER JOIN Field AS f ON f.post_id = p.post_id INNER JOIN FieldType AS ft ON ft.field_id = f.field_id INNER JOIN Sport AS s ON s.sport_id = ft.sport_id WHERE p.post_id = ?; "
 		var fields = `SELECT f.field_id, f.name, f.price, f.recommended_number_of_persons, GROUP_CONCAT(DISTINCT s.sport_name) AS sports_names FROM Field AS f LEFT OUTER JOIN FieldType AS ft ON ft.field_id = f.field_id LEFT OUTER JOIN Sport AS s ON s.sport_id = ft.sport_id WHERE f.post_id = ${postId} GROUP BY f.field_id;`
@@ -552,6 +562,7 @@ export class ApiController extends BaseController {
 				images: results[1].slice(1),
 				address: results[0][0].address,
 				description: results[0][0].information,
+				phone_number: results[0][0].phone_number,
 				fields: results[3]
 			} as unknown as Post; 
 			res.status(200).json(post)	
@@ -578,20 +589,24 @@ export class ApiController extends BaseController {
 				res.json({ success: "false", errorMsg:"SQL error!"})
 				return
 			}
-			const post = {
-				succes: true,
-				post_id: postId,
-				name: results[0][0].name,
-    			images: results[1].map(x => x.image_id),
-   				address: results[0][0].address,
-   				description: results[0][0].information,
-				sports: results[2].map(x => x.sport_name),
-    			rating: results[0][0],
-    			reviews: results[3],
-				fields: results[4],
-				phonenumber: results[0][0].phone_number
-				} as Post;
-			res.status(200).json(post)	
+			if(results[0].length > 0) {
+				const post = {
+					succes: true,
+					post_id: postId,
+					name: results[0][0].name,
+					images: results[1].map(x => x.image_id),
+					address: results[0][0].address,
+					description: results[0][0].information,
+					sports: results[2].map(x => x.sport_name),
+					rating: results[0][0],
+					reviews: results[3],
+					fields: results[4],
+					phonenumber: results[0][0].phone_number
+					} as Post;
+				res.status(200).json(post)	
+			} else {
+				res.json({ success: "false", errorMsg:"Post not found!"})
+			}
 		});
 	}
 	
@@ -639,16 +654,19 @@ export class ApiController extends BaseController {
 		var information = req.body.description
 		var images = req.body.images
 		var thumbnail_id = req.body.thumbnail
-		var update = "UPDATE Post SET name = ?, address = ?, information = ? WHERE post_id = ?; "
+		var phonenumber = req.body.phonenumber
+		var update = `UPDATE Post SET name = "${name}", address = "${address}", information = "${information}", phone_number = "${phonenumber}" WHERE post_id = ${postId}; `
 		var qryDeleteImages = `DELETE ip.* FROM ImagePost ip JOIN Image i ON ip.image_id = i.image_id WHERE ip.post_id = ${postId}; `
 		var qryAddImages = `INSERT INTO ImagePost VALUES (${thumbnail_id}, (SELECT max(post_id) FROM Post), COALESCE((SELECT max(incr_id) FROM (SELECT * FROM ImagePost) AS ImagePost2 WHERE ImagePost2.post_id = (SELECT max(post_id) FROM Post)), 0) + 1); `
-		for (let i = 0; i < images.length; i++) { 
-			const image_id = images[i]
-			qryAddImages += `INSERT INTO ImagePost VALUES (${image_id}, (SELECT max(post_id) FROM Post), COALESCE((SELECT max(incr_id) FROM (SELECT * FROM ImagePost) AS ImagePost2 WHERE ImagePost2.post_id = (SELECT max(post_id) FROM Post)), 0) + 1); `
+		if(images !== undefined){
+			for (let i = 0; i < images.length; i++) { 
+				const image_id = images[i]
+				qryAddImages += `INSERT INTO ImagePost VALUES (${image_id},${postId} , COALESCE((SELECT max(incr_id) FROM (SELECT * FROM ImagePost) AS ImagePost2 WHERE ImagePost2.post_id = ${postId}), 0) + 1); `
+			}
 		}
 		var fields = req.body.fields == undefined ? [] : req.body.fields
-		var addedFields = req.body.addedFields == undefined ? [] : req.body.addedFields
-		var deletedFields = req.body.deletedFields == undefined ? [] : req.body.deletedFields
+		var addedFields = req.body.addedfields == undefined ? [] : req.body.addedfields
+		var deletedFields = req.body.deletedfields == undefined ? [] : req.body.deletedfields
 		var qryUpdateFields = ""
 		for (let i = 0; i < fields.length; i++) { 
 			const field = fields[i]
@@ -676,13 +694,14 @@ export class ApiController extends BaseController {
 			const price = field.price
 			const recommendedNumberOfPersons = field.recommended
 			const addedSports = field.tags
-			qryAddedFields += `INSERT INTO Field VALUES(NULL, (SELECT max(post_id) FROM Post), "${name}", ${price}, ${recommendedNumberOfPersons}); `
+			qryAddedFields += `INSERT INTO Field VALUES(NULL, ${postId}, "${name}", ${price}, ${recommendedNumberOfPersons}); `
 			for (let i = 0; i < addedSports.length; i++) { 
 				const sportName = addedSports[i]
 				qryAddedFields += `INSERT INTO FieldType VALUES((SELECT sport_id FROM Sport WHERE sport_name = "${sportName}"), (SELECT max(field_id) FROM Field)); `
 			}
 		}
-		db.query(update + qryDeleteImages + qryAddImages + qryUpdateFields + qryDeletefields + qryAddedFields, [name, address, information, postId], (err) => {
+		
+		db.query(update + qryDeleteImages + qryAddImages + qryUpdateFields + qryDeletefields + qryAddedFields, /*[name, address, information, postId],*/ (err) => {
 			if (err) {
 				res.status(400).send({ success: false, errorMsg: "Error sql!"})
 				throw err
@@ -786,32 +805,5 @@ export class ApiController extends BaseController {
 				return
 			}
 			res.json({succes: true, error: "no error"})})
-	}
-
-
-	/**
-	 * Check if a string is actually provided
-	 * 
-	 * @param {string} param Provided string
-	 * @returns {boolean} Valid or not
-	 */
-	private _isGiven(param: string): boolean {
-		if (param == null)
-			return false;
-		else
-			return param.trim().length > 0;
-	}
-
-	/**
-	 * Check if a string is a valid email
-	 * 
-	 * @param {string} email Email string
-	 * @returns {boolean} Valid or not
-	 */
-	private _isEmailValid(email: string): boolean {
-		const atIdx = email.indexOf("@");
-		const dotIdx = email.indexOf(".");
-
-		return atIdx != -1 && dotIdx != -1 && dotIdx > atIdx;
 	}
 }
